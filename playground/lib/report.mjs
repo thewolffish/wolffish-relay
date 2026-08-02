@@ -286,16 +286,30 @@ export function renderReference(run) {
 <div class="wrap"><table>
 <thead><tr><th>State</th><th>Where it lives</th><th>Lifetime</th></tr></thead>
 <tbody>
-<tr><td>Device keypairs, peer public key, pairing secret</td><td>OS keychain on each device</td><td>Until you unpair</td></tr>
+<tr><td>Device keypairs, peer public key, pairing secret</td><td>Platform secure storage — see below</td><td>Until you unpair</td></tr>
 <tr><td>Conversations, configs, files, sync cursors</td><td>Each app's own local database</td><td>The product's own data — endpoints, not the pipe</td></tr>
 <tr><td>Session keys</td><td>Both devices' RAM</td><td>One connection</td></tr>
 <tr><td>The socket pair and a role tag</td><td>Relay RAM</td><td>Dies with the sockets</td></tr>
 <tr><td>Any database, object store, queue or log</td><td class="bad">Does not exist</td><td>—</td></tr>
 </tbody></table></div>
 
-<p>Unpairing is deleting two keychain entries. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.</p>
+<p>Unpairing is deleting the stored key material on each device. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.</p>
 
 <div class="note good"><strong>Measured, not asserted.</strong> After the example run below moved ${bytes(totals.bytes ?? 0)} through production, the relay's storage meters read <strong>0 B</strong> across every counter — SQL storage, key-value storage, rows read, rows written, storage operations. Compute happened; storage did not.</div>
+
+<h3>Where the keys actually live</h3>
+<p>"Secure storage" is not one thing, and the guarantee differs per platform.</p>
+<div class="wrap"><table>
+<thead><tr><th>Platform</th><th>Backend</th><th>What it protects against</th></tr></thead>
+<tbody>
+<tr><td>macOS</td><td>Keychain, via Electron <code>safeStorage</code></td><td>Other users <strong>and</strong> other apps in the same user session</td></tr>
+<tr><td>iOS</td><td>Keychain Services, via <code>expo-secure-store</code></td><td>Other apps; survives app uninstall under the same bundle ID</td></tr>
+<tr><td>Android</td><td>Keystore-encrypted <code>SharedPreferences</code></td><td>Other apps; cleared on uninstall</td></tr>
+<tr><td>Windows</td><td>DPAPI, via Electron <code>safeStorage</code></td><td>Other <strong>users</strong> on the machine — not other apps running as you</td></tr>
+<tr><td>Linux</td><td><code>gnome-libsecret</code> / <code>kwallet</code></td><td>Other users, <strong>only when a secret store is present</strong></td></tr>
+</tbody></table></div>
+<div class="note warn"><strong>The Linux caveat is real.</strong> From Electron's own documentation: if no secret store is available, items "will be unprotected as they are encrypted via hardcoded plaintext password" — obfuscation, not encryption. It applies to headless boxes and minimal window managers, exactly the setups a local-first desktop agent attracts. Clients should check <code>safeStorage.isEncryptionAvailable()</code> and, on Linux, <code>getSelectedStorageBackend()</code>; a result of <code>basic_text</code> means the keys sit at rest in the clear and the user deserves to be told.</div>
+<p>Why it matters more than it first appears: anyone who can read the user's home directory can already read that app's local data. But the <em>keys</em> buy something extra — the ability to impersonate that device to its peer and pull data from the other end of the tunnel. On a Linux box with no keyring, that reach is the exposure.</p>
 
 <h2 id="logs">No logs, no telemetry</h2>
 <p>Retention has a second face: even without a database, a service can leak everything through its logs. This one is configured so there is nothing to leak, and the settings live in version control so every deploy re-asserts them.</p>

@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.9-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.10-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [report.html](report.html) in this repo.
@@ -214,17 +214,35 @@ It **cannot** read content, alter it undetected, replay it, forge a frame either
 
 "We don't store your data" is a promise. Here is the version you can check — every piece of state in the system and where it lives.
 
-| State                                            | Where it lives                | Lifetime                                         |
-| ------------------------------------------------ | ----------------------------- | ------------------------------------------------ |
-| Device keypairs, peer public key, pairing secret | OS keychain on each device    | Until you unpair                                 |
-| Conversations, configs, files, sync cursors      | Each app's own local database | The product's own data — endpoints, not the pipe |
-| Session keys                                     | Both devices' RAM             | One connection                                   |
-| The socket pair and a role tag                   | Relay RAM                     | Dies with the sockets                            |
-| Any database, object store, queue or log         | **Does not exist**            | —                                                |
+| State                                            | Where it lives                                 | Lifetime                                         |
+| ------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------ |
+| Device keypairs, peer public key, pairing secret | Platform secure storage — see the caveat below | Until you unpair                                 |
+| Conversations, configs, files, sync cursors      | Each app's own local database                  | The product's own data — endpoints, not the pipe |
+| Session keys                                     | Both devices' RAM                              | One connection                                   |
+| The socket pair and a role tag                   | Relay RAM                                      | Dies with the sockets                            |
+| Any database, object store, queue or log         | **Does not exist**                             | —                                                |
 
-Unpairing means deleting two keychain entries. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.
+Unpairing means deleting the stored key material on each device. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.
 
 **Measured, not asserted.** After a full playground run moved ~249 MB through production, the relay's storage meters read **0 B** across every counter — SQL storage, key-value storage, rows read, rows written, storage operations. Compute happened; storage did not.
+
+### Where the keys actually live
+
+"Secure storage" is not one thing, and the guarantee differs per platform. What each side actually gets:
+
+| Platform | Backend                                                         | What it protects against                                         |
+| -------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| macOS    | Keychain, via Electron `safeStorage`                            | Other users **and** other apps in the same user session          |
+| iOS      | Keychain Services, via `expo-secure-store`                      | Other apps; survives app uninstall under the same bundle ID      |
+| Android  | Keystore-encrypted `SharedPreferences`, via `expo-secure-store` | Other apps; cleared on uninstall                                 |
+| Windows  | DPAPI, via Electron `safeStorage`                               | Other **users** on the machine — _not_ other apps running as you |
+| Linux    | `gnome-libsecret` / `kwallet`, via Electron `safeStorage`       | Other users, **only when a secret store is present**             |
+
+**The Linux caveat is real and worth stating plainly.** From Electron's own documentation: if no secret store is available, items "will be unprotected as they are encrypted via hardcoded plaintext password". That is obfuscation, not encryption, and it applies to headless boxes and minimal window managers — exactly the setups a local-first desktop agent attracts.
+
+Clients should call `safeStorage.isEncryptionAvailable()` and, on Linux, `safeStorage.getSelectedStorageBackend()`. A result of `basic_text` means the keys sit at rest effectively in the clear, and the user deserves to be told.
+
+Why this matters more than it first appears: anyone who can read the user's home directory can already read that app's local data. But the _keys_ buy something extra — the ability to impersonate that device to its peer and pull data from the other end of the tunnel. On a Linux box with no keyring, that reach is the exposure.
 
 ## No logs, no telemetry
 
