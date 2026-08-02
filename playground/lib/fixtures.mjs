@@ -161,6 +161,44 @@ export async function selectFiles(desktopDir, log) {
 }
 
 /**
+ * Files the phone holds and the desktop does not — what a camera roll or a
+ * voice memo folder stands in for. These travel mobile → desktop.
+ */
+export async function selectMobileUploads(outboxDir, log) {
+  await fs.mkdir(outboxDir, { recursive: true })
+  const filesDir = path.join(WORKSPACE, 'files')
+  const staged = []
+
+  const all = await fs.readdir(filesDir)
+  const images = []
+  for (const name of all) {
+    if (!/\.(png|jpe?g)$/i.test(name)) continue
+    try {
+      const { size } = await fs.stat(path.join(filesDir, name))
+      if (size > 20_000 && size < 3_000_000) images.push({ name, size })
+    } catch {
+      /* skip */
+    }
+  }
+  images.sort((a, b) => b.size - a.size)
+
+  if (images[0]) {
+    const uploadName = 'camera-capture.png'
+    await fs.copyFile(path.join(filesDir, images[0].name), path.join(outboxDir, uploadName))
+    staged.push({ name: uploadName, size: images[0].size, source: 'phone camera roll' })
+  }
+
+  const memo = `# Voice memo — transcribed on device\n\nCaptured on the phone, never on the desktop.\nUploaded through the tunnel so the agent can act on it.\n`
+  await fs.writeFile(path.join(outboxDir, 'voice-memo.md'), memo, 'utf8')
+  staged.push({ name: 'voice-memo.md', size: Buffer.byteLength(memo), source: 'phone recording' })
+
+  log?.mobile(
+    `staged ${staged.length} files the phone alone has (${bytes(staged.reduce((n, f) => n + f.size, 0))})`
+  )
+  return staged
+}
+
+/**
  * Puts miller.pdf in the desktop replica. Prefers a cached copy, then the local
  * Documents copy, and downloads from the CDN when neither exists — the download
  * path is what a fresh clone of this repo will take.

@@ -43,7 +43,10 @@ async function main() {
     desktopFiles: path.join(outDir, 'desktop', 'files'),
     mobile: path.join(outDir, 'mobile'),
     mobileFiles: path.join(outDir, 'mobile', 'files'),
-    parts: path.join(outDir, 'mobile', '.parts')
+    mobileOutbox: path.join(outDir, 'mobile', 'outbox'),
+    parts: path.join(outDir, 'mobile', '.parts'),
+    desktopInbox: path.join(outDir, 'desktop', 'inbox'),
+    desktopParts: path.join(outDir, 'desktop', '.parts')
   }
 
   // A fresh run starts from clean folders, but the download cache survives.

@@ -100,8 +100,47 @@ export function createDesktop({ tunnel, log, fixtures, desktopDir }) {
   }
 }
 
-export function createMobile({ tunnel, log, mobileDir }) {
+export function createMobile({ tunnel, log, mobileDir, outboxDir }) {
   const received = { deltas: [], events: [], files: [] }
+
+  // The phone is not only a consumer: it advertises capabilities only it has,
+  // and the desktop agent calls them exactly the way the phone calls the
+  // desktop. The tunnel is symmetric once established — whoever dialled out
+  // first is irrelevant from here on.
+  tunnel.onRpc('device.tools', async () => ({
+    device: 'wolffish-mobile',
+    tools: [
+      {
+        name: 'camera.capture',
+        description: 'Take a photo with the rear camera',
+        args: ['facing']
+      },
+      { name: 'location.current', description: 'Current GPS fix', args: ['accuracy'] },
+      { name: 'notify.send', description: 'Raise a local notification', args: ['title', 'body'] },
+      { name: 'clipboard.read', description: 'Read the phone clipboard', args: [] }
+    ]
+  }))
+
+  tunnel.onRpc('device.status', async () => ({
+    battery: 0.72,
+    charging: false,
+    network: 'cellular',
+    locale: 'en-SA',
+    at: Date.now()
+  }))
+
+  tunnel.onRpc('notify.send', async ({ title, body }) => {
+    log.mobile(`notification raised — "${title}"`)
+    received.events.push({ topic: 'notify.send', payload: { title, body } })
+    return { shown: true }
+  })
+
+  /** The desktop asks the phone for a file the phone alone has. */
+  tunnel.onRpc('camera.capture', async ({ name }) => {
+    log.mobile(`capture requested — uploading ${name}`)
+    const sent = await tunnel.sendFile(path.join(outboxDir, name), { name, mime: 'image/png' })
+    return { name, ok: sent.ok, bytes: sent.sentBytes, ms: sent.ms }
+  })
 
   tunnel.onEvent('agent.status', (payload) => {
     received.events.push({ topic: 'agent.status', payload })

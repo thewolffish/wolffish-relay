@@ -27,6 +27,7 @@ npm run playground:local    # drive `npm run dev` instead of production
 | Sync configuration        | The desktop's real `config.json` arrives section-complete, with credentials redacted **before** they leave the desktop                                           |
 | Sync conversations        | Index first, then full bodies on demand — compared byte for byte against the originals                                                                           |
 | Run a live conversation   | A real agent turn streams back as deltas and tool events, reassembled exactly on the phone                                                                       |
+| Reverse direction         | The phone serves the desktop: it advertises its own tools, the desktop invokes one, and the phone uploads files the desktop never had |
 | Move files                | Real workspace files plus deliberate edge cases: a zero-byte file, an Arabic (RTL) filename, and a payload one byte past the chunk boundary                      |
 | Move the 248 MB PDF       | `miller.pdf` transfers while the phone is forcibly disconnected mid-flight, then resumes from its checkpoint and verifies sha256 end to end                      |
 | Verify delivery           | Every file on both sides is hashed and compared; no partial files may remain                                                                                     |

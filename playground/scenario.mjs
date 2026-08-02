@@ -46,12 +46,14 @@ export const phases = [
       )
 
       const files = await fixtures.selectFiles(dirs.desktopFiles, log)
+      const mobileUploads = await fixtures.selectMobileUploads(dirs.mobileOutbox, log)
       ctx.fixtures = {
         desktopConfig,
         snapshot,
         conversations,
         indexRows: fixtures.toIndexRows(conversations),
-        files
+        files,
+        mobileUploads
       }
 
       if (!ctx.options.quick) {
@@ -197,12 +199,23 @@ export const phases = [
         fixtures: ctx.fixtures,
         desktopDir: ctx.dirs.desktopFiles
       })
-      ctx.mobileDevice = createMobile({ tunnel: ctx.mobile, log, mobileDir: ctx.dirs.mobile })
+      ctx.mobileDevice = createMobile({
+        tunnel: ctx.mobile,
+        log,
+        mobileDir: ctx.dirs.mobile,
+        outboxDir: ctx.dirs.mobileOutbox
+      })
       ctx.mobile.configureReceiver({
         directory: ctx.dirs.mobileFiles,
         partDirectory: ctx.dirs.parts,
         onProgress: (state) => ctx.onFileProgress?.(state),
         onComplete: (result) => ctx.onFileComplete?.(result)
+      })
+      // The desktop receives too — the file engine is the same on both sides.
+      ctx.desktop.configureReceiver({
+        directory: ctx.dirs.desktopInbox,
+        partDirectory: ctx.dirs.desktopParts,
+        onComplete: (result) => ctx.onDesktopFileComplete?.(result)
       })
     }
   },
@@ -539,6 +552,82 @@ export const phases = [
   },
 
   {
+    title: 'Reverse direction — the phone serves the desktop',
+    detail: 'device tools, a remote invocation, and an upload',
+    async run(ctx) {
+      const { log } = ctx
+
+      // Nothing about the tunnel favours the side that dialled out first: the
+      // desktop now calls the phone, and the phone answers.
+      const tools = await ctx.desktop.rpc('device.tools')
+      log.desktop(
+        `phone advertises ${tools.tools.length} tools: ${tools.tools.map((t) => t.name).join(', ')}`
+      )
+      log.check(tools.tools.length >= 4, "desktop fetched the phone's own tool definitions")
+
+      const status = await ctx.desktop.rpc('device.status')
+      log.check(
+        typeof status.battery === 'number' && status.network === 'cellular',
+        'desktop read live device status from the phone',
+        `battery ${(status.battery * 100).toFixed(0)}% · ${status.network}`
+      )
+
+      const notified = await ctx.desktop.rpc('notify.send', {
+        title: 'Sync complete',
+        body: 'Your desktop finished the transfer.'
+      })
+      log.check(notified.shown === true, 'desktop invoked a tool that only the phone can run')
+
+      // And the phone uploads a file the desktop never had.
+      const uploads = ctx.fixtures.mobileUploads
+      const completions = []
+      ctx.onDesktopFileComplete = (result) => completions.push(result)
+
+      for (const file of uploads) {
+        const started = Date.now()
+        const sent =
+          file.name === 'camera-capture.png'
+            ? await ctx.desktop.rpc('camera.capture', { name: file.name }) // desktop asks; phone pushes
+            : await ctx.mobile.sendFile(path.join(ctx.dirs.mobileOutbox, file.name), {
+                name: file.name
+              })
+        const ms = Math.max(1, Date.now() - started)
+        const record = {
+          name: file.name,
+          size: file.size,
+          source: `${file.source} → desktop`,
+          ok: sent.ok !== false,
+          ms,
+          speed: speed(file.size, ms)
+        }
+        log.transfer(record)
+        log.check(record.ok, `phone uploaded ${file.name}`, `${bytes(file.size)} · ${duration(ms)}`)
+      }
+
+      // Verify on the desktop's disk, not just by return value.
+      let matched = 0
+      for (const file of uploads) {
+        const landed = path.join(ctx.dirs.desktopInbox, file.name)
+        try {
+          const [a, b] = await Promise.all([
+            hashFile(path.join(ctx.dirs.mobileOutbox, file.name)),
+            hashFile(landed)
+          ])
+          if (a === b) matched += 1
+        } catch {
+          /* counted as a miss below */
+        }
+      }
+      log.check(
+        matched === uploads.length,
+        'uploads are byte-identical on the desktop',
+        `${matched}/${uploads.length}`
+      )
+      ctx.results.reverse = { tools: tools.tools.length, uploads: uploads.length, matched }
+    }
+  },
+
+  {
     title: 'Move the 248 MB PDF, and survive a dropout',
     detail: 'the phone loses signal mid-transfer and resumes',
     skip: (ctx) => ctx.options.quick,
@@ -614,7 +703,12 @@ export const phases = [
               })
             )
           ])
-          ctx.mobileDevice = createMobile({ tunnel: ctx.mobile, log, mobileDir: ctx.dirs.mobile })
+          ctx.mobileDevice = createMobile({
+            tunnel: ctx.mobile,
+            log,
+            mobileDir: ctx.dirs.mobile,
+            outboxDir: ctx.dirs.mobileOutbox
+          })
           ctx.mobile.configureReceiver({
             directory: ctx.dirs.mobileFiles,
             partDirectory: ctx.dirs.parts
