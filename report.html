@@ -1,2029 +1,654 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#040a18" />
-    <title>Wolffish Relay — how it works, what it promises, how to run your own</title>
-    <meta
-      name="description"
-      content="Reference for the Wolffish tunnel relay: architecture, security model, zero-retention guarantees, a verified example run, and a self-hosting guide."
-    />
-    <link rel="icon" type="image/png" href="https://cdn.wolffi.sh/generic/icon.png" />
-    <style>
-      :root {
-        --bg: #0a0f1b;
-        --fg: #e8edf5;
-        --muted: #93a1b8;
-        --line: rgba(147, 161, 184, 0.18);
-        --card: rgba(147, 161, 184, 0.06);
-        --ok: #34d399;
-        --bad: #f87171;
-        --accent: #6ea8fe;
-        --shadow: rgba(0, 0, 0, 0.5);
-      }
-      @media (prefers-color-scheme: light) {
-        :root {
-          --bg: #f7f9fc;
-          --fg: #141b26;
-          --muted: #5a6b82;
-          --line: rgba(20, 27, 38, 0.13);
-          --card: rgba(20, 27, 38, 0.04);
-          --ok: #059669;
-          --bad: #dc2626;
-          --accent: #2563eb;
-          --shadow: rgba(20, 27, 38, 0.15);
-        }
-      }
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      html {
-        scroll-behavior: smooth;
-      }
-      body {
-        background: var(--bg);
-        color: var(--fg);
-        font:
-          16px/1.7 ui-sans-serif,
-          system-ui,
-          -apple-system,
-          'Segoe UI',
-          Roboto,
-          sans-serif;
-        -webkit-font-smoothing: antialiased;
-        padding: 3rem 1.25rem 5rem;
-      }
-      main {
-        max-width: 56rem;
-        margin: 0 auto;
-      }
-      h1 {
-        font-size: 2rem;
-        letter-spacing: -0.025em;
-        line-height: 1.25;
-      }
-      h2 {
-        font-size: 1.35rem;
-        letter-spacing: -0.02em;
-        margin: 3.5rem 0 0.5rem;
-        scroll-margin-top: 1rem;
-      }
-      h3 {
-        font-size: 1.02rem;
-        margin: 2rem 0 0.5rem;
-      }
-      p {
-        margin: 0.85rem 0;
-      }
-      a {
-        color: var(--accent);
-      }
-      .lede {
-        color: var(--muted);
-        font-size: 1.05rem;
-        margin-top: 0.6rem;
-      }
-      .muted {
-        color: var(--muted);
-      }
-      .rule {
-        height: 1px;
-        background: var(--line);
-        border: 0;
-        margin: 2.5rem 0;
-      }
-      header .badges {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-top: 1.1rem;
-      }
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.3rem 0.8rem;
-        border-radius: 999px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        border: 1px solid var(--line);
-        background: var(--card);
-        color: var(--muted);
-      }
-      .badge.pass {
-        background: rgba(52, 211, 153, 0.14);
-        color: var(--ok);
-        border-color: transparent;
-      }
-      .badge.fail {
-        background: rgba(248, 113, 113, 0.14);
-        color: var(--bad);
-        border-color: transparent;
-      }
-      .dot {
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 50%;
-        background: currentColor;
-      }
-      nav.toc {
-        border: 1px solid var(--line);
-        background: var(--card);
-        border-radius: 14px;
-        padding: 1rem 1.25rem;
-        margin-top: 2rem;
-      }
-      nav.toc ol {
-        margin: 0;
-        padding-left: 1.2rem;
-        columns: 2;
-        column-gap: 2rem;
-      }
-      nav.toc li {
-        margin: 0.2rem 0;
-        font-size: 0.92rem;
-      }
-      @media (max-width: 38rem) {
-        nav.toc ol {
-          columns: 1;
-        }
-      }
-      .cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-        gap: 0.7rem;
-        margin: 1.25rem 0;
-      }
-      .card {
-        border: 1px solid var(--line);
-        background: var(--card);
-        border-radius: 12px;
-        padding: 0.85rem 1rem;
-      }
-      .card .k {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.09em;
-        color: var(--muted);
-      }
-      .card .v {
-        font-size: 1.2rem;
-        font-weight: 650;
-        margin-top: 0.15rem;
-      }
-      .wrap {
-        overflow-x: auto;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--card);
-        margin: 1rem 0;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9rem;
-      }
-      th,
-      td {
-        text-align: left;
-        padding: 0.55rem 0.7rem;
-        border-bottom: 1px solid var(--line);
-        vertical-align: top;
-      }
-      tr:last-child td {
-        border-bottom: 0;
-      }
-      th {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.09em;
-        color: var(--muted);
-        font-weight: 600;
-      }
-      td.num {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-      code,
-      pre,
-      .mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      code {
-        font-size: 0.86em;
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 5px;
-        padding: 0.08em 0.35em;
-      }
-      pre {
-        padding: 1rem;
-        overflow-x: auto;
-        font-size: 0.82rem;
-        line-height: 1.55;
-        white-space: pre;
-        color: var(--fg);
-      }
-      pre code {
-        background: none;
-        border: 0;
-        padding: 0;
-      }
-      .ok {
-        color: var(--ok);
-      }
-      .bad {
-        color: var(--bad);
-      }
-      .accent {
-        color: var(--accent);
-      }
-      figure {
-        margin: 1.5rem 0;
-      }
-      figure svg {
-        width: 100%;
-        height: auto;
-        display: block;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--card);
-        padding: 0.75rem;
-      }
-      figcaption {
-        color: var(--muted);
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-        text-align: center;
-      }
-      .d-title {
-        fill: var(--fg);
-        font:
-          600 15px ui-sans-serif,
-          system-ui,
-          sans-serif;
-      }
-      .d-sub {
-        fill: var(--muted);
-        font:
-          13px ui-sans-serif,
-          system-ui,
-          sans-serif;
-      }
-      .d-tiny {
-        fill: var(--muted);
-        font:
-          11.5px ui-sans-serif,
-          system-ui,
-          sans-serif;
-      }
-      .d-mono {
-        fill: var(--fg);
-        font:
-          12.5px ui-monospace,
-          SFMono-Regular,
-          Menlo,
-          monospace;
-      }
-      .d-ok {
-        fill: var(--ok);
-        font:
-          600 12.5px ui-sans-serif,
-          system-ui,
-          sans-serif;
-      }
-      .d-bad {
-        fill: var(--bad);
-        font:
-          600 12.5px ui-sans-serif,
-          system-ui,
-          sans-serif;
-      }
-      .split {
-        display: flex;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-        align-items: flex-start;
-      }
-      .split > * {
-        flex: 1;
-        min-width: 16rem;
-      }
-      .qr {
-        max-width: 160px;
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        display: block;
-      }
-      .note {
-        border-left: 3px solid var(--accent);
-        background: var(--card);
-        border-radius: 0 10px 10px 0;
-        padding: 0.85rem 1.1rem;
-        margin: 1.25rem 0;
-        font-size: 0.93rem;
-      }
-      .note.warn {
-        border-left-color: var(--bad);
-      }
-      .note.good {
-        border-left-color: var(--ok);
-      }
-      .flow {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-        border: 1px solid var(--line);
-        background: var(--card);
-        border-radius: 14px;
-        padding: 1.1rem 1.25rem;
-        margin: 1rem 0;
-      }
-      .flow .node {
-        flex: 1;
-        min-width: 12rem;
-      }
-      .flow .node .t {
-        font-weight: 650;
-      }
-      .flow .node .p {
-        color: var(--muted);
-        font-size: 0.8rem;
-        word-break: break-all;
-      }
-      .arrow {
-        color: var(--accent);
-        font-weight: 650;
-        text-align: center;
-        font-size: 0.82rem;
-        min-width: 10rem;
-      }
-      ul,
-      ol.spaced {
-        margin: 0.7rem 0 0.7rem 1.3rem;
-      }
-      li {
-        margin: 0.3rem 0;
-      }
-      footer {
-        margin-top: 4rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--line);
-        color: var(--muted);
-        font-size: 0.88rem;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <header>
-        <h1>Wolffish Relay</h1>
-        <p class="lede">
-          The zero-retention meeting point that carries encrypted traffic between your desktop and
-          your phone — and cannot read, keep, or log any of it.
-        </p>
-        <div class="badges">
-          <span class="badge pass"><span class="dot"></span>example run: 55/55 checks passed</span>
-          <span class="badge">MIT</span>
-          <span class="badge">Cloudflare Workers</span>
-          <span class="badge mono">wss://relay.wolffi.sh</span>
-        </div>
-      </header>
+<html lang="en"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<meta name="theme-color" content="#040a18" />
+<title>Wolffish Relay — how it works, what it promises, how to run your own</title>
+<meta name="description" content="Reference for the Wolffish tunnel relay: architecture, security model, zero-retention guarantees, a verified example run, and a self-hosting guide." />
+<link rel="icon" type="image/png" href="https://cdn.wolffi.sh/generic/icon.png" />
+<style>
+  :root{
+    --bg:#0a0f1b; --fg:#e8edf5; --muted:#93a1b8; --line:rgba(147,161,184,.18);
+    --card:rgba(147,161,184,.06); --ok:#34d399; --bad:#f87171; --accent:#6ea8fe;
+    --shadow:rgba(0,0,0,.5);
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f7f9fc; --fg:#141b26; --muted:#5a6b82; --line:rgba(20,27,38,.13);
+      --card:rgba(20,27,38,.04); --ok:#059669; --bad:#dc2626; --accent:#2563eb;
+      --shadow:rgba(20,27,38,.15); }
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--fg);
+    font:16px/1.7 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:3rem 1.25rem 5rem}
+  main{max-width:56rem;margin:0 auto}
+  h1{font-size:2rem;letter-spacing:-.025em;line-height:1.25}
+  h2{font-size:1.35rem;letter-spacing:-.02em;margin:3.5rem 0 .5rem;scroll-margin-top:1rem}
+  h3{font-size:1.02rem;margin:2rem 0 .5rem}
+  p{margin:.85rem 0}
+  a{color:var(--accent)}
+  .lede{color:var(--muted);font-size:1.05rem;margin-top:.6rem}
+  .muted{color:var(--muted)}
+  .rule{height:1px;background:var(--line);border:0;margin:2.5rem 0}
+  header .badges{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1.1rem}
+  .badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;border-radius:999px;
+    font-size:.82rem;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--muted)}
+  .badge.pass{background:rgba(52,211,153,.14);color:var(--ok);border-color:transparent}
+  .badge.fail{background:rgba(248,113,113,.14);color:var(--bad);border-color:transparent}
+  .dot{width:.5rem;height:.5rem;border-radius:50%;background:currentColor}
+  nav.toc{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:1rem 1.25rem;margin-top:2rem}
+  nav.toc ol{margin:0;padding-left:1.2rem;columns:2;column-gap:2rem}
+  nav.toc li{margin:.2rem 0;font-size:.92rem}
+  @media (max-width:38rem){nav.toc ol{columns:1}}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.7rem;margin:1.25rem 0}
+  .card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:.85rem 1rem}
+  .card .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+  .card .v{font-size:1.2rem;font-weight:650;margin-top:.15rem}
+  .wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:1rem 0}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  th{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.86em;background:var(--card);border:1px solid var(--line);border-radius:5px;padding:.08em .35em}
+  pre{padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;white-space:pre;color:var(--fg)}
+  pre code{background:none;border:0;padding:0}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}.accent{color:var(--accent)}
+  figure{margin:1.5rem 0}
+  figure svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:14px;
+    background:var(--card);padding:.75rem}
+  figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem;text-align:center}
+  .d-title{fill:var(--fg);font:600 15px ui-sans-serif,system-ui,sans-serif}
+  .d-sub{fill:var(--muted);font:13px ui-sans-serif,system-ui,sans-serif}
+  .d-tiny{fill:var(--muted);font:11.5px ui-sans-serif,system-ui,sans-serif}
+  .d-mono{fill:var(--fg);font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .d-ok{fill:var(--ok);font:600 12.5px ui-sans-serif,system-ui,sans-serif}
+  .d-bad{fill:var(--bad);font:600 12.5px ui-sans-serif,system-ui,sans-serif}
+  .split{display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start}
+  .split>*{flex:1;min-width:16rem}
+  .qr{max-width:160px;border-radius:12px;border:1px solid var(--line);display:block}
+  .note{border-left:3px solid var(--accent);background:var(--card);border-radius:0 10px 10px 0;
+    padding:.85rem 1.1rem;margin:1.25rem 0;font-size:.93rem}
+  .note.warn{border-left-color:var(--bad)}
+  .note.good{border-left-color:var(--ok)}
+  .flow{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;border:1px solid var(--line);
+    background:var(--card);border-radius:14px;padding:1.1rem 1.25rem;margin:1rem 0}
+  .flow .node{flex:1;min-width:12rem}
+  .flow .node .t{font-weight:650}
+  .flow .node .p{color:var(--muted);font-size:.8rem;word-break:break-all}
+  .arrow{color:var(--accent);font-weight:650;text-align:center;font-size:.82rem;min-width:10rem}
+  ul,ol.spaced{margin:.7rem 0 .7rem 1.3rem}
+  li{margin:.3rem 0}
+  footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem}
+</style></head><body><main>
 
-      <nav class="toc">
-        <ol>
-          <li><a href="#how">How it works</a></li>
-          <li><a href="#built">How it's built</a></li>
-          <li><a href="#contract">The wire contract</a></li>
-          <li><a href="#moving">Moving data and files</a></li>
-          <li><a href="#security">Security promises</a></li>
-          <li><a href="#zdr">Zero data retention</a></li>
-          <li><a href="#logs">No logs, no telemetry</a></li>
-          <li><a href="#run">Example run</a></li>
-          <li><a href="#selfhost">Run your own relay</a></li>
-        </ol>
-      </nav>
+<header>
+  <h1>Wolffish Relay</h1>
+  <p class="lede">The zero-retention meeting point that carries encrypted traffic between your desktop and your phone — and cannot read, keep, or log any of it.</p>
+  <div class="badges">
+    <span class="badge pass"><span class="dot"></span>example run: 55/55 checks passed</span>
+    <span class="badge">MIT</span>
+    <span class="badge">Cloudflare Workers</span>
+    <span class="badge mono">wss://relay.wolffi.sh</span>
+  </div>
+</header>
 
-      <h2 id="how">How it works</h2>
-      <p>
-        Two devices need to talk. One sits behind a home router, the other behind a mobile carrier's
-        NAT; neither can accept an incoming connection. So both dial <em>outward</em> to the same
-        address and meet there. That address is the relay.
-      </p>
+<nav class="toc">
+  <ol>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#built">How it's built</a></li>
+    <li><a href="#contract">The wire contract</a></li>
+    <li><a href="#moving">Moving data and files</a></li>
+    <li><a href="#security">Security promises</a></li>
+    <li><a href="#zdr">Zero data retention</a></li>
+    <li><a href="#logs">No logs, no telemetry</a></li>
+    <li><a href="#run">Example run</a></li>
+    <li><a href="#selfhost">Run your own relay</a></li>
+  </ol>
+</nav>
 
-      <figure>
-        <svg
-          viewBox="0 0 900 300"
-          role="img"
-          aria-label="Both devices dial out to the relay; end-to-end encryption spans them"
-        >
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
-            </marker>
-            <marker
-              id="arrow-muted"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
-            </marker>
-          </defs>
-          <rect
-            x="10"
-            y="90"
-            width="200"
-            height="110"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--line)"
-          />
-          <text x="110" y="122" text-anchor="middle" class="d-title">Desktop</text>
-          <text x="110" y="144" text-anchor="middle" class="d-sub">wolffish-app · host</text>
-          <text x="110" y="164" text-anchor="middle" class="d-sub">parks and waits</text>
-          <text x="110" y="184" text-anchor="middle" class="d-tiny">behind home NAT</text>
+<h2 id="how">How it works</h2>
+<p>Two devices need to talk. One sits behind a home router, the other behind a mobile carrier's NAT; neither can accept an incoming connection. So both dial <em>outward</em> to the same address and meet there. That address is the relay.</p>
 
-          <rect
-            x="345"
-            y="80"
-            width="210"
-            height="130"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--accent)"
-            stroke-dasharray="4 3"
-          />
-          <text x="450" y="112" text-anchor="middle" class="d-title">relay.wolffi.sh</text>
-          <text x="450" y="134" text-anchor="middle" class="d-sub">Worker + Durable Object</text>
-          <text x="450" y="154" text-anchor="middle" class="d-sub">
-            one instance per rendezvous ID
-          </text>
-          <text x="450" y="176" text-anchor="middle" class="d-tiny">
-            RAM only · no disk · no logs
-          </text>
-          <text x="450" y="196" text-anchor="middle" class="d-tiny">
-            forwards bytes it cannot read
-          </text>
+<figure>
+<svg viewBox="0 0 900 300" role="img" aria-label="Both devices dial out to the relay; end-to-end encryption spans them">
+  
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+    </marker>
+  </defs>
+  <rect x="10" y="90" width="200" height="110" rx="12" fill="var(--card)" stroke="var(--line)" />
+  <text x="110" y="122" text-anchor="middle" class="d-title">Desktop</text>
+  <text x="110" y="144" text-anchor="middle" class="d-sub">wolffish-app · host</text>
+  <text x="110" y="164" text-anchor="middle" class="d-sub">parks and waits</text>
+  <text x="110" y="184" text-anchor="middle" class="d-tiny">behind home NAT</text>
 
-          <rect
-            x="690"
-            y="90"
-            width="200"
-            height="110"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--line)"
-          />
-          <text x="790" y="122" text-anchor="middle" class="d-title">Phone</text>
-          <text x="790" y="144" text-anchor="middle" class="d-sub">wolffish-mobile · guest</text>
-          <text x="790" y="164" text-anchor="middle" class="d-sub">dials in when active</text>
-          <text x="790" y="184" text-anchor="middle" class="d-tiny">behind carrier CGNAT</text>
+  <rect x="345" y="80" width="210" height="130" rx="12" fill="var(--card)" stroke="var(--accent)" stroke-dasharray="4 3" />
+  <text x="450" y="112" text-anchor="middle" class="d-title">relay.wolffi.sh</text>
+  <text x="450" y="134" text-anchor="middle" class="d-sub">Worker + Durable Object</text>
+  <text x="450" y="154" text-anchor="middle" class="d-sub">one instance per rendezvous ID</text>
+  <text x="450" y="176" text-anchor="middle" class="d-tiny">RAM only · no disk · no logs</text>
+  <text x="450" y="196" text-anchor="middle" class="d-tiny">forwards bytes it cannot read</text>
 
-          <line
-            x1="215"
-            y1="145"
-            x2="340"
-            y2="145"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <line
-            x1="685"
-            y1="145"
-            x2="560"
-            y2="145"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="277" y="134" text-anchor="middle" class="d-tiny">outbound wss</text>
-          <text x="623" y="134" text-anchor="middle" class="d-tiny">outbound wss</text>
-          <text x="277" y="168" text-anchor="middle" class="d-tiny">no port forwarding</text>
-          <text x="623" y="168" text-anchor="middle" class="d-tiny">no static IP</text>
+  <rect x="690" y="90" width="200" height="110" rx="12" fill="var(--card)" stroke="var(--line)" />
+  <text x="790" y="122" text-anchor="middle" class="d-title">Phone</text>
+  <text x="790" y="144" text-anchor="middle" class="d-sub">wolffish-mobile · guest</text>
+  <text x="790" y="164" text-anchor="middle" class="d-sub">dials in when active</text>
+  <text x="790" y="184" text-anchor="middle" class="d-tiny">behind carrier CGNAT</text>
 
-          <path
-            d="M 110 78 C 110 30, 790 30, 790 78"
-            fill="none"
-            stroke="var(--ok)"
-            stroke-width="2"
-            stroke-dasharray="6 4"
-          />
-          <rect
-            x="368"
-            y="18"
-            width="164"
-            height="26"
-            rx="13"
-            fill="var(--bg)"
-            stroke="var(--ok)"
-          />
-          <text x="450" y="36" text-anchor="middle" class="d-ok">end-to-end encrypted</text>
+  <line x1="215" y1="145" x2="340" y2="145" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="685" y1="145" x2="560" y2="145" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="277" y="134" text-anchor="middle" class="d-tiny">outbound wss</text>
+  <text x="623" y="134" text-anchor="middle" class="d-tiny">outbound wss</text>
+  <text x="277" y="168" text-anchor="middle" class="d-tiny">no port forwarding</text>
+  <text x="623" y="168" text-anchor="middle" class="d-tiny">no static IP</text>
 
-          <text x="450" y="252" text-anchor="middle" class="d-sub">
-            Because both devices connect outward, the tunnel forms across any NAT.
-          </text>
-          <text x="450" y="274" text-anchor="middle" class="d-sub">
-            The relay never holds a key, so it can only move sealed bytes.
-          </text>
-        </svg>
-        <figcaption>
-          Neither device listens for connections. They meet in the middle, and the middle can't read
-          what passes through it.
-        </figcaption>
-      </figure>
+  <path d="M 110 78 C 110 30, 790 30, 790 78" fill="none" stroke="var(--ok)" stroke-width="2" stroke-dasharray="6 4" />
+  <rect x="368" y="18" width="164" height="26" rx="13" fill="var(--bg)" stroke="var(--ok)" />
+  <text x="450" y="36" text-anchor="middle" class="d-ok">end-to-end encrypted</text>
 
-      <p>
-        The relay's whole job is to notice that two sockets presented the same rendezvous ID and to
-        pass bytes between them. It performs no authentication of its own, keeps no accounts, and
-        holds nothing once the sockets close. Everything that makes the tunnel <em>safe</em> happens
-        on the devices, before a byte is handed over.
-      </p>
+  <text x="450" y="252" text-anchor="middle" class="d-sub">Because both devices connect outward, the tunnel forms across any NAT.</text>
+  <text x="450" y="274" text-anchor="middle" class="d-sub">The relay never holds a key, so it can only move sealed bytes.</text>
+</svg><figcaption>Neither device listens for connections. They meet in the middle, and the middle can't read what passes through it.</figcaption></figure>
 
-      <h3>Pairing happens once, by QR</h3>
-      <div class="split">
-        <div>
-          <p>
-            The desktop displays a QR code carrying three things: the relay URL, its own long-lived
-            public key, and a freshly generated 32-byte pairing secret. The phone's camera reads it.
-          </p>
-          <p>
-            That camera hop matters more than it looks. Because the secret travels
-            <strong>out of band</strong> — screen to lens, never over the network — a hostile relay
-            cannot insert itself into the pairing. It never sees the secret, so it can never
-            complete the handshake in the middle.
-          </p>
-          <p>
-            From that secret both devices derive the same rendezvous ID:
-            <code>rid = HMAC(secret, "rid-v1")</code>. It is 256 bits, unguessable, and the only
-            fact about a pairing the relay ever learns. It identifies a meeting, not a person.
-          </p>
-        </div>
-        <div style="flex: 0 0 auto">
-          <img
-            class="qr"
-            src="https://cdn.wolffi.sh/generic/qr.png"
-            alt="Example pairing QR code"
-            width="160"
-            height="160"
-          />
-          <p class="muted" style="font-size: 0.8rem; text-align: center; margin-top: 0.5rem">
-            illustrative — each pairing<br />generates a fresh one
-          </p>
-        </div>
-      </div>
+<p>The relay's whole job is to notice that two sockets presented the same rendezvous ID and to pass bytes between them. It performs no authentication of its own, keeps no accounts, and holds nothing once the sockets close. Everything that makes the tunnel <em>safe</em> happens on the devices, before a byte is handed over.</p>
 
-      <h3>Then a handshake, every time they reconnect</h3>
-      <p>
-        Pairing is once. Reconnecting is automatic and needs no user action: the devices already
-        hold each other's keys, so they run a <strong>Noise IKpsk2</strong> handshake — the pattern
-        designed for exactly this asymmetry, where the initiator already knows the responder's
-        static key but not vice versa.
-      </p>
+<h3>Pairing happens once, by QR</h3>
+<div class="split">
+  <div>
+    <p>The desktop displays a QR code carrying three things: the relay URL, its own long-lived public key, and a freshly generated 32-byte pairing secret. The phone's camera reads it.</p>
+    <p>That camera hop matters more than it looks. Because the secret travels <strong>out of band</strong> — screen to lens, never over the network — a hostile relay cannot insert itself into the pairing. It never sees the secret, so it can never complete the handshake in the middle.</p>
+    <p>From that secret both devices derive the same rendezvous ID: <code>rid = HMAC(secret, "rid-v1")</code>. It is 256 bits, unguessable, and the only fact about a pairing the relay ever learns. It identifies a meeting, not a person.</p>
+  </div>
+  <div style="flex:0 0 auto">
+    <img class="qr" src="https://cdn.wolffi.sh/generic/qr.png" alt="Example pairing QR code" width="160" height="160" />
+    <p class="muted" style="font-size:.8rem;text-align:center;margin-top:.5rem">illustrative — each pairing<br />generates a fresh one</p>
+  </div>
+</div>
 
-      <figure>
-        <svg
-          viewBox="0 0 900 400"
-          role="img"
-          aria-label="QR pairing followed by a two-message Noise IKpsk2 handshake"
-        >
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
-            </marker>
-            <marker
-              id="arrow-muted"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
-            </marker>
-          </defs>
-          <text x="150" y="26" text-anchor="middle" class="d-title">Desktop</text>
-          <text x="750" y="26" text-anchor="middle" class="d-title">Phone</text>
-          <line x1="150" y1="40" x2="150" y2="370" stroke="var(--line)" stroke-width="2" />
-          <line x1="750" y1="40" x2="750" y2="370" stroke="var(--line)" stroke-width="2" />
+<h3>Then a handshake, every time they reconnect</h3>
+<p>Pairing is once. Reconnecting is automatic and needs no user action: the devices already hold each other's keys, so they run a <strong>Noise IKpsk2</strong> handshake — the pattern designed for exactly this asymmetry, where the initiator already knows the responder's static key but not vice versa.</p>
 
-          <rect
-            x="30"
-            y="52"
-            width="240"
-            height="52"
-            rx="8"
-            fill="var(--card)"
-            stroke="var(--line)"
-          />
-          <text x="150" y="72" text-anchor="middle" class="d-sub">shows a QR carrying</text>
-          <text x="150" y="92" text-anchor="middle" class="d-mono">
-            relay URL · static pubkey · 32-byte secret
-          </text>
+<figure>
+<svg viewBox="0 0 900 400" role="img" aria-label="QR pairing followed by a two-message Noise IKpsk2 handshake">
+  
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+    </marker>
+  </defs>
+  <text x="150" y="26" text-anchor="middle" class="d-title">Desktop</text>
+  <text x="750" y="26" text-anchor="middle" class="d-title">Phone</text>
+  <line x1="150" y1="40" x2="150" y2="370" stroke="var(--line)" stroke-width="2" />
+  <line x1="750" y1="40" x2="750" y2="370" stroke="var(--line)" stroke-width="2" />
 
-          <line
-            x1="270"
-            y1="78"
-            x2="628"
-            y2="78"
-            stroke="var(--muted)"
-            stroke-width="2"
-            stroke-dasharray="5 4"
-            marker-end="url(#arrow-muted)"
-          />
-          <text x="450" y="68" text-anchor="middle" class="d-tiny">
-            scanned by camera — out of band, so the relay can never sit in the middle
-          </text>
+  <rect x="30" y="52" width="240" height="52" rx="8" fill="var(--card)" stroke="var(--line)" />
+  <text x="150" y="72" text-anchor="middle" class="d-sub">shows a QR carrying</text>
+  <text x="150" y="92" text-anchor="middle" class="d-mono">relay URL · static pubkey · 32-byte secret</text>
 
-          <rect
-            x="600"
-            y="112"
-            width="290"
-            height="46"
-            rx="8"
-            fill="var(--card)"
-            stroke="var(--line)"
-          />
-          <text x="745" y="140" text-anchor="middle" class="d-mono">
-            rid = HMAC(secret, "rid-v1")
-          </text>
-          <text x="450" y="180" text-anchor="middle" class="d-tiny">
-            both sides derive the same 256-bit rendezvous ID — the only thing the relay learns
-          </text>
+  <line x1="270" y1="78" x2="628" y2="78" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-muted)" />
+  <text x="450" y="68" text-anchor="middle" class="d-tiny">scanned by camera — out of band, so the relay can never sit in the middle</text>
 
-          <line
-            x1="740"
-            y1="214"
-            x2="162"
-            y2="214"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="206" text-anchor="middle" class="d-mono">message 1: e, es, s, ss</text>
-          <text x="450" y="232" text-anchor="middle" class="d-tiny">
-            phone's identity travels encrypted; desktop learns and pins it
-          </text>
+  <rect x="600" y="112" width="290" height="46" rx="8" fill="var(--card)" stroke="var(--line)" />
+  <text x="745" y="140" text-anchor="middle" class="d-mono">rid = HMAC(secret, "rid-v1")</text>
+  <text x="450" y="180" text-anchor="middle" class="d-tiny">both sides derive the same 256-bit rendezvous ID — the only thing the relay learns</text>
 
-          <line
-            x1="160"
-            y1="278"
-            x2="738"
-            y2="278"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="270" text-anchor="middle" class="d-mono">message 2: e, ee, se, psk</text>
-          <text x="450" y="296" text-anchor="middle" class="d-tiny">
-            the pairing secret is mixed in here — only the device that scanned can finish
-          </text>
+  <line x1="740" y1="214" x2="162" y2="214" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="206" text-anchor="middle" class="d-mono">message 1: e, es, s, ss</text>
+  <text x="450" y="232" text-anchor="middle" class="d-tiny">phone's identity travels encrypted; desktop learns and pins it</text>
 
-          <rect
-            x="300"
-            y="322"
-            width="300"
-            height="52"
-            rx="8"
-            fill="var(--card)"
-            stroke="var(--ok)"
-          />
-          <text x="450" y="342" text-anchor="middle" class="d-ok">
-            two transport keys, one per direction
-          </text>
-          <text x="450" y="362" text-anchor="middle" class="d-tiny">
-            fresh every session — yesterday's traffic stays unreadable if a key leaks tomorrow
-          </text>
-        </svg>
-        <figcaption>
-          Two messages, one round trip. The pairing secret enters as the PSK, binding the session to
-          the device that scanned the code.
-        </figcaption>
-      </figure>
+  <line x1="160" y1="278" x2="738" y2="278" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="270" text-anchor="middle" class="d-mono">message 2: e, ee, se, psk</text>
+  <text x="450" y="296" text-anchor="middle" class="d-tiny">the pairing secret is mixed in here — only the device that scanned can finish</text>
 
-      <p>
-        Three properties fall out of it. <strong>Mutual authentication:</strong> each side proves
-        possession of its long-term key, and the desktop pins the phone's key on first contact.
-        <strong>Forward secrecy:</strong> fresh ephemeral keys per session mean a key stolen next
-        year cannot decrypt traffic captured today. <strong>Pairing binding:</strong> the PSK means
-        knowing the rendezvous ID is not enough — an attacker who somehow learns it still cannot
-        complete a handshake.
-      </p>
+  <rect x="300" y="322" width="300" height="52" rx="8" fill="var(--card)" stroke="var(--ok)" />
+  <text x="450" y="342" text-anchor="middle" class="d-ok">two transport keys, one per direction</text>
+  <text x="450" y="362" text-anchor="middle" class="d-tiny">fresh every session — yesterday's traffic stays unreadable if a key leaks tomorrow</text>
+</svg><figcaption>Two messages, one round trip. The pairing secret enters as the PSK, binding the session to the device that scanned the code.</figcaption></figure>
 
-      <h2 id="built">How it's built</h2>
-      <p>
-        The entire cloud footprint is one Worker script containing one Durable Object class — about
-        250 lines. There is no server, no container, no database, and nothing to patch.
-      </p>
+<p>Three properties fall out of it. <strong>Mutual authentication:</strong> each side proves possession of its long-term key, and the desktop pins the phone's key on first contact. <strong>Forward secrecy:</strong> fresh ephemeral keys per session mean a key stolen next year cannot decrypt traffic captured today. <strong>Pairing binding:</strong> the PSK means knowing the rendezvous ID is not enough — an attacker who somehow learns it still cannot complete a handshake.</p>
 
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>src/index.ts</code></td>
-              <td>
-                Stateless front door: validates the URL shape and the role, then routes to the one
-                Durable Object that owns this rendezvous ID
-              </td>
-            </tr>
-            <tr>
-              <td><code>src/tunnel.ts</code></td>
-              <td>
-                The Durable Object: pairs the two roles, forwards binary frames verbatim, replaces
-                zombie sockets, enforces limits
-              </td>
-            </tr>
-            <tr>
-              <td><code>src/protocol.ts</code></td>
-              <td>
-                The wire contract in one file — ID format, roles, frame cap, keepalive, close codes,
-                presence notices
-              </td>
-            </tr>
-            <tr>
-              <td><code>wrangler.jsonc</code></td>
-              <td>
-                Configuration, and where the retention guarantees are pinned so a deploy re-asserts
-                them
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h2 id="built">How it's built</h2>
+<p>The entire cloud footprint is one Worker script containing one Durable Object class — about 250 lines. There is no server, no container, no database, and nothing to patch.</p>
 
-      <h3>Why a Durable Object</h3>
-      <p>
-        A plain Worker is stateless by design: two requests can land on two machines in two cities
-        that share nothing. If both devices simply "connected to the Worker", they would land on
-        unrelated instances and never find each other.
-      </p>
-      <p>
-        A Durable Object adds exactly one thing: <strong>named single-instance routing</strong>.
-        Every request for a given name reaches the same one running instance, anywhere on earth.
-        That is what lets two sockets be in the same place at the same time. "Durable" refers to
-        that stable identity — not to storage. A Durable Object <em>may</em> attach persistent
-        storage; this one simply never calls it.
-      </p>
+<div class="wrap"><table>
+<thead><tr><th>File</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>src/index.ts</code></td><td>Stateless front door: validates the URL shape and the role, then routes to the one Durable Object that owns this rendezvous ID</td></tr>
+<tr><td><code>src/tunnel.ts</code></td><td>The Durable Object: pairs the two roles, forwards binary frames verbatim, replaces zombie sockets, enforces limits</td></tr>
+<tr><td><code>src/protocol.ts</code></td><td>The wire contract in one file — ID format, roles, frame cap, keepalive, close codes, presence notices</td></tr>
+<tr><td><code>wrangler.jsonc</code></td><td>Configuration, and where the retention guarantees are pinned so a deploy re-asserts them</td></tr>
+</tbody></table></div>
 
-      <div class="note">
-        The relay uses the WebSocket <strong>Hibernation API</strong>, so an idle tunnel is evicted
-        from memory entirely and costs nothing while a desktop sits parked. Connection state lives
-        inside the sockets themselves, never in instance fields — and eviction is the whole cleanup
-        story.
-      </div>
+<h3>Why a Durable Object</h3>
+<p>A plain Worker is stateless by design: two requests can land on two machines in two cities that share nothing. If both devices simply "connected to the Worker", they would land on unrelated instances and never find each other.</p>
+<p>A Durable Object adds exactly one thing: <strong>named single-instance routing</strong>. Every request for a given name reaches the same one running instance, anywhere on earth. That is what lets two sockets be in the same place at the same time. "Durable" refers to that stable identity — not to storage. A Durable Object <em>may</em> attach persistent storage; this one simply never calls it.</p>
 
-      <h2 id="contract">The wire contract</h2>
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Route</th>
-              <th>Behaviour</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>GET /t/&lt;rid&gt;?role=host|guest</code> + upgrade</td>
-              <td>Join the tunnel for that rendezvous ID</td>
-            </tr>
-            <tr>
-              <td><code>GET /healthz</code></td>
-              <td><code>200 ok</code></td>
-            </tr>
-            <tr>
-              <td><code>GET /</code></td>
-              <td>Status page</td>
-            </tr>
-            <tr>
-              <td>anything else</td>
-              <td><code>404</code> / <code>400</code> / <code>405</code> / <code>426</code></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<div class="note">The relay uses the WebSocket <strong>Hibernation API</strong>, so an idle tunnel is evicted from memory entirely and costs nothing while a desktop sits parked. Connection state lives inside the sockets themselves, never in instance fields — and eviction is the whole cleanup story.</div>
 
-      <p>
-        <code>rid</code> must match <code>^[0-9a-f]{64}$</code>. The desktop connects as
-        <code>host</code> — the parked, always-on side. The phone connects as <code>guest</code>.
-      </p>
+<h2 id="contract">The wire contract</h2>
+<div class="wrap"><table>
+<thead><tr><th>Route</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><code>GET /t/&lt;rid&gt;?role=host|guest</code> + upgrade</td><td>Join the tunnel for that rendezvous ID</td></tr>
+<tr><td><code>GET /healthz</code></td><td><code>200 ok</code></td></tr>
+<tr><td><code>GET /</code></td><td>Status page</td></tr>
+<tr><td>anything else</td><td><code>404</code> / <code>400</code> / <code>405</code> / <code>426</code></td></tr>
+</tbody></table></div>
 
-      <h3>Frames</h3>
-      <ul>
-        <li>
-          <strong>Binary frames are peer data</strong>: opaque sealed records, forwarded verbatim to
-          the other role, capped at 1 MiB each.
-        </li>
-        <li>
-          <strong>Text frames from the relay</strong> are presence notices, the only text it ever
-          sends: <code>{"t":"peer-present"}</code> and <code>{"t":"peer-gone"}</code>.
-        </li>
-        <li>
-          <strong>Text from a client</strong>: exactly one is legal, the keepalive
-          <code>ping</code> → <code>pong</code>, answered by the runtime without even waking the
-          object. Anything else closes the connection.
-        </li>
-      </ul>
+<p><code>rid</code> must match <code>^[0-9a-f]{64}$</code>. The desktop connects as <code>host</code> — the parked, always-on side. The phone connects as <code>guest</code>.</p>
 
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Close code</th>
-              <th>Meaning</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>4000</code> Replaced</td>
-              <td>A newer connection for your role arrived; this socket was evicted</td>
-            </tr>
-            <tr>
-              <td><code>4400</code> ProtocolViolation</td>
-              <td>You sent a non-keepalive text frame</td>
-            </tr>
-            <tr>
-              <td><code>4413</code> MessageTooLarge</td>
-              <td>You sent a frame over 1 MiB</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h3>Frames</h3>
+<ul>
+  <li><strong>Binary frames are peer data</strong>: opaque sealed records, forwarded verbatim to the other role, capped at 1 MiB each.</li>
+  <li><strong>Text frames from the relay</strong> are presence notices, the only text it ever sends: <code>{"t":"peer-present"}</code> and <code>{"t":"peer-gone"}</code>.</li>
+  <li><strong>Text from a client</strong>: exactly one is legal, the keepalive <code>ping</code> → <code>pong</code>, answered by the runtime without even waking the object. Anything else closes the connection.</li>
+</ul>
 
-      <p>
-        Two semantics matter for client authors. One live socket per role — a reconnect
-        <em>replaces</em> its predecessor, and the peer never sees a false "gone" during that swap.
-        And frames sent while the peer is absent are <strong>dropped</strong>: presence notices tell
-        you when someone is there, and delivery guarantees belong to the end-to-end protocol's
-        acknowledgements, never to the relay.
-      </p>
+<div class="wrap"><table>
+<thead><tr><th>Close code</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>4000</code> Replaced</td><td>A newer connection for your role arrived; this socket was evicted</td></tr>
+<tr><td><code>4400</code> ProtocolViolation</td><td>You sent a non-keepalive text frame</td></tr>
+<tr><td><code>4413</code> MessageTooLarge</td><td>You sent a frame over 1 MiB</td></tr>
+</tbody></table></div>
 
-      <h2 id="moving">Moving data and files</h2>
-      <p>
-        Above the sealed frame layer sit three kinds of traffic, all multiplexed on the one socket:
-        <strong>RPC</strong> (request/response — fetch the config, list conversations, run an agent
-        turn), <strong>events</strong> (unsolicited pushes — streaming agent output, "this
-        conversation changed"), and <strong>file transfer</strong>.
-      </p>
+<p>Two semantics matter for client authors. One live socket per role — a reconnect <em>replaces</em> its predecessor, and the peer never sees a false "gone" during that swap. And frames sent while the peer is absent are <strong>dropped</strong>: presence notices tell you when someone is there, and delivery guarantees belong to the end-to-end protocol's acknowledgements, never to the relay.</p>
 
-      <p>
-        Files never move as files. They move as a stream of independently sealed chunks, which is
-        what makes the transfer resumable, memory-flat, and verifiable.
-      </p>
+<h2 id="moving">Moving data and files</h2>
+<p>Above the sealed frame layer sit three kinds of traffic, all multiplexed on the one socket: <strong>RPC</strong> (request/response — fetch the config, list conversations, run an agent turn), <strong>events</strong> (unsolicited pushes — streaming agent output, "this conversation changed"), and <strong>file transfer</strong>.</p>
 
-      <figure>
-        <svg
-          viewBox="0 0 900 380"
-          role="img"
-          aria-label="File transfer: manifest, want, windowed chunks, acks, resume after a dropout"
-        >
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
-            </marker>
-            <marker
-              id="arrow-muted"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
-            </marker>
-          </defs>
-          <text x="150" y="26" text-anchor="middle" class="d-title">Sender</text>
-          <text x="750" y="26" text-anchor="middle" class="d-title">Receiver</text>
-          <line x1="150" y1="40" x2="150" y2="352" stroke="var(--line)" stroke-width="2" />
-          <line x1="750" y1="40" x2="750" y2="352" stroke="var(--line)" stroke-width="2" />
+<p>Files never move as files. They move as a stream of independently sealed chunks, which is what makes the transfer resumable, memory-flat, and verifiable.</p>
 
-          <line
-            x1="160"
-            y1="70"
-            x2="738"
-            y2="70"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="62" text-anchor="middle" class="d-mono">
-            MANIFEST — name, size, chunk size, count, sha256
-          </text>
+<figure>
+<svg viewBox="0 0 900 380" role="img" aria-label="File transfer: manifest, want, windowed chunks, acks, resume after a dropout">
+  
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+    </marker>
+  </defs>
+  <text x="150" y="26" text-anchor="middle" class="d-title">Sender</text>
+  <text x="750" y="26" text-anchor="middle" class="d-title">Receiver</text>
+  <line x1="150" y1="40" x2="150" y2="352" stroke="var(--line)" stroke-width="2" />
+  <line x1="750" y1="40" x2="750" y2="352" stroke="var(--line)" stroke-width="2" />
 
-          <line
-            x1="740"
-            y1="108"
-            x2="162"
-            y2="108"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="100" text-anchor="middle" class="d-mono">
-            WANT — "start from chunk N"
-          </text>
-          <text x="450" y="126" text-anchor="middle" class="d-tiny">
-            N is 0 for a new file, or the last checkpoint for one already part-received
-          </text>
+  <line x1="160" y1="70" x2="738" y2="70" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="62" text-anchor="middle" class="d-mono">MANIFEST — name, size, chunk size, count, sha256</text>
 
-          <line
-            x1="160"
-            y1="162"
-            x2="738"
-            y2="162"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <line
-            x1="160"
-            y1="180"
-            x2="738"
-            y2="180"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <line
-            x1="160"
-            y1="198"
-            x2="738"
-            y2="198"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="154" text-anchor="middle" class="d-mono">
-            CHUNK × up to 32 in flight — 256 KiB each, sealed individually
-          </text>
-          <text x="450" y="222" text-anchor="middle" class="d-tiny">
-            memory stays flat: the window is held, never the file
-          </text>
+  <line x1="740" y1="108" x2="162" y2="108" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="100" text-anchor="middle" class="d-mono">WANT — "start from chunk N"</text>
+  <text x="450" y="126" text-anchor="middle" class="d-tiny">N is 0 for a new file, or the last checkpoint for one already part-received</text>
 
-          <line
-            x1="740"
-            y1="252"
-            x2="162"
-            y2="252"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="244" text-anchor="middle" class="d-mono">
-            ACK every 16 chunks — releases credit and writes a checkpoint
-          </text>
+  <line x1="160" y1="162" x2="738" y2="162" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="160" y1="180" x2="738" y2="180" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="160" y1="198" x2="738" y2="198" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="154" text-anchor="middle" class="d-mono">CHUNK × up to 32 in flight — 256 KiB each, sealed individually</text>
+  <text x="450" y="222" text-anchor="middle" class="d-tiny">memory stays flat: the window is held, never the file</text>
 
-          <rect
-            x="250"
-            y="278"
-            width="400"
-            height="30"
-            rx="8"
-            fill="var(--card)"
-            stroke="var(--bad)"
-            stroke-dasharray="4 3"
-          />
-          <text x="450" y="298" text-anchor="middle" class="d-bad">
-            phone loses signal — socket dies mid-flight
-          </text>
+  <line x1="740" y1="252" x2="162" y2="252" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="244" text-anchor="middle" class="d-mono">ACK every 16 chunks — releases credit and writes a checkpoint</text>
 
-          <line
-            x1="740"
-            y1="332"
-            x2="162"
-            y2="332"
-            stroke="var(--accent)"
-            stroke-width="2"
-            marker-end="url(#arrow)"
-          />
-          <text x="450" y="324" text-anchor="middle" class="d-mono">
-            reconnect → new handshake → WANT from the checkpoint
-          </text>
-          <text x="450" y="352" text-anchor="middle" class="d-tiny">
-            the transfer continues; nothing already delivered is sent twice
-          </text>
-        </svg>
-        <figcaption>
-          The sender holds a window, never the file. Memory stays flat whether the file is 3 MB or
-          300 GB.
-        </figcaption>
-      </figure>
+  <rect x="250" y="278" width="400" height="30" rx="8" fill="var(--card)" stroke="var(--bad)" stroke-dasharray="4 3" />
+  <text x="450" y="298" text-anchor="middle" class="d-bad">phone loses signal — socket dies mid-flight</text>
 
-      <p>
-        Each chunk is encrypted on its own, so a corrupted or reordered one fails loudly and alone
-        rather than poisoning the file. The receiver writes each chunk straight to disk at its
-        offset and checkpoints its progress every sixteen chunks; if the connection dies,
-        reconnecting replays the manifest and the receiver simply asks to continue from its
-        checkpoint. When the last chunk lands, the whole-file hash is compared against the manifest
-        before the file is made visible.
-      </p>
+  <line x1="740" y1="332" x2="162" y2="332" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="450" y="324" text-anchor="middle" class="d-mono">reconnect → new handshake → WANT from the checkpoint</text>
+  <text x="450" y="352" text-anchor="middle" class="d-tiny">the transfer continues; nothing already delivered is sent twice</text>
+</svg><figcaption>The sender holds a window, never the file. Memory stays flat whether the file is 3 MB or 300 GB.</figcaption></figure>
 
-      <div class="note">
-        There is no protocol size limit. The practical bounds are disk space on the receiving device
-        and patience — a 1 GB file over a relay path is minutes, not seconds, and survives any
-        number of interruptions along the way.
-      </div>
+<p>Each chunk is encrypted on its own, so a corrupted or reordered one fails loudly and alone rather than poisoning the file. The receiver writes each chunk straight to disk at its offset and checkpoints its progress every sixteen chunks; if the connection dies, reconnecting replays the manifest and the receiver simply asks to continue from its checkpoint. When the last chunk lands, the whole-file hash is compared against the manifest before the file is made visible.</p>
 
-      <h2 id="security">Security promises</h2>
-      <p>
-        The relay is <strong>untrusted by design</strong>. Every guarantee below holds even if the
-        relay is fully compromised, run by someone else, or replaced by a hostile clone.
-      </p>
+<div class="note">There is no protocol size limit. The practical bounds are disk space on the receiving device and patience — a 1 GB file over a relay path is minutes, not seconds, and survives any number of interruptions along the way.</div>
 
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Promise</th>
-              <th>How it's achieved</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Content is unreadable in transit</strong></td>
-              <td>
-                Every frame is sealed on-device with ChaCha20-Poly1305 under keys the relay never
-                sees
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Tampering is detected</strong></td>
-              <td>
-                AEAD authentication on every frame — a single flipped bit fails the tag and the
-                frame is discarded
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Replay and reordering fail</strong></td>
-              <td>Per-session keys with a strictly increasing nonce counter</td>
-            </tr>
-            <tr>
-              <td><strong>Past traffic stays safe</strong></td>
-              <td>
-                Forward secrecy: fresh ephemeral keys per session, so a stolen device key cannot
-                decrypt earlier sessions
-              </td>
-            </tr>
-            <tr>
-              <td><strong>The relay cannot impersonate either device</strong></td>
-              <td>
-                Mutual authentication against pinned static keys; the pairing secret it never saw is
-                required to finish a handshake
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Pairing cannot be intercepted</strong></td>
-              <td>
-                The secret travels out of band, screen to camera, and is mixed into the handshake as
-                the PSK
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Strangers cannot join</strong></td>
-              <td>
-                The rendezvous ID is 256 bits and unguessable; even holding it does not let an
-                attacker complete a handshake
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Nothing survives the session</strong></td>
-              <td>No storage is ever written — see the retention section below</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h2 id="security">Security promises</h2>
+<p>The relay is <strong>untrusted by design</strong>. Every guarantee below holds even if the relay is fully compromised, run by someone else, or replaced by a hostile clone.</p>
 
-      <h3>What a hostile relay could still do</h3>
-      <p>
-        Stated plainly, because a security claim without its limits is marketing. A relay operator —
-        including Cloudflare, including you if you self-host — can observe, while the sockets are
-        live: the two IP addresses, the rendezvous ID, the timing of frames, and their sizes. It can
-        also refuse service or drop frames.
-      </p>
-      <p>
-        It cannot read content, alter it undetected, replay it, forge a frame either device will
-        accept, impersonate either side, or recover anything after disconnection. Traffic metadata
-        is the irreducible cost of any relayed system; the design keeps it to the minimum and never
-        records it.
-      </p>
+<div class="wrap"><table>
+<thead><tr><th>Promise</th><th>How it's achieved</th></tr></thead>
+<tbody>
+<tr><td><strong>Content is unreadable in transit</strong></td><td>Every frame is sealed on-device with ChaCha20-Poly1305 under keys the relay never sees</td></tr>
+<tr><td><strong>Tampering is detected</strong></td><td>AEAD authentication on every frame — a single flipped bit fails the tag and the frame is discarded</td></tr>
+<tr><td><strong>Replay and reordering fail</strong></td><td>Per-session keys with a strictly increasing nonce counter</td></tr>
+<tr><td><strong>Past traffic stays safe</strong></td><td>Forward secrecy: fresh ephemeral keys per session, so a stolen device key cannot decrypt earlier sessions</td></tr>
+<tr><td><strong>The relay cannot impersonate either device</strong></td><td>Mutual authentication against pinned static keys; the pairing secret it never saw is required to finish a handshake</td></tr>
+<tr><td><strong>Pairing cannot be intercepted</strong></td><td>The secret travels out of band, screen to camera, and is mixed into the handshake as the PSK</td></tr>
+<tr><td><strong>Strangers cannot join</strong></td><td>The rendezvous ID is 256 bits and unguessable; even holding it does not let an attacker complete a handshake</td></tr>
+<tr><td><strong>Nothing survives the session</strong></td><td>No storage is ever written — see the retention section below</td></tr>
+</tbody></table></div>
 
-      <h2 id="zdr">Zero data retention</h2>
-      <p>
-        "We don't store your data" is a promise. This is the version you can check: an inventory of
-        every piece of state in the system and where it lives.
-      </p>
+<h3>What a hostile relay could still do</h3>
+<p>Stated plainly, because a security claim without its limits is marketing. A relay operator — including Cloudflare, including you if you self-host — can observe, while the sockets are live: the two IP addresses, the rendezvous ID, the timing of frames, and their sizes. It can also refuse service or drop frames.</p>
+<p>It cannot read content, alter it undetected, replay it, forge a frame either device will accept, impersonate either side, or recover anything after disconnection. Traffic metadata is the irreducible cost of any relayed system; the design keeps it to the minimum and never records it.</p>
 
-      <figure>
-        <svg
-          viewBox="0 0 900 260"
-          role="img"
-          aria-label="All durable state lives on the two devices; the relay holds only live sockets"
-        >
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
-            </marker>
-            <marker
-              id="arrow-muted"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
-            </marker>
-          </defs>
-          <rect
-            x="20"
-            y="60"
-            width="230"
-            height="150"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--ok)"
-          />
-          <text x="135" y="88" text-anchor="middle" class="d-title">Desktop</text>
-          <text x="135" y="112" text-anchor="middle" class="d-sub">keys in Keychain</text>
-          <text x="135" y="134" text-anchor="middle" class="d-sub">conversations, files</text>
-          <text x="135" y="156" text-anchor="middle" class="d-sub">sync cursors, outbox</text>
-          <text x="135" y="186" text-anchor="middle" class="d-ok">durable</text>
+<h2 id="zdr">Zero data retention</h2>
+<p>"We don't store your data" is a promise. This is the version you can check: an inventory of every piece of state in the system and where it lives.</p>
 
-          <rect
-            x="335"
-            y="60"
-            width="230"
-            height="150"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--bad)"
-            stroke-dasharray="4 3"
-          />
-          <text x="450" y="88" text-anchor="middle" class="d-title">Relay</text>
-          <text x="450" y="112" text-anchor="middle" class="d-sub">two live sockets</text>
-          <text x="450" y="134" text-anchor="middle" class="d-sub">a role tag per socket</text>
-          <text x="450" y="156" text-anchor="middle" class="d-sub">nothing else, ever</text>
-          <text x="450" y="186" text-anchor="middle" class="d-bad">amnesiac</text>
+<figure>
+<svg viewBox="0 0 900 260" role="img" aria-label="All durable state lives on the two devices; the relay holds only live sockets">
+  
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)" />
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)" />
+    </marker>
+  </defs>
+  <rect x="20" y="60" width="230" height="150" rx="12" fill="var(--card)" stroke="var(--ok)" />
+  <text x="135" y="88" text-anchor="middle" class="d-title">Desktop</text>
+  <text x="135" y="112" text-anchor="middle" class="d-sub">keys in Keychain</text>
+  <text x="135" y="134" text-anchor="middle" class="d-sub">conversations, files</text>
+  <text x="135" y="156" text-anchor="middle" class="d-sub">sync cursors, outbox</text>
+  <text x="135" y="186" text-anchor="middle" class="d-ok">durable</text>
 
-          <rect
-            x="650"
-            y="60"
-            width="230"
-            height="150"
-            rx="12"
-            fill="var(--card)"
-            stroke="var(--ok)"
-          />
-          <text x="765" y="88" text-anchor="middle" class="d-title">Phone</text>
-          <text x="765" y="112" text-anchor="middle" class="d-sub">keys in Keystore</text>
-          <text x="765" y="134" text-anchor="middle" class="d-sub">mirrored data, file cache</text>
-          <text x="765" y="156" text-anchor="middle" class="d-sub">resume checkpoints</text>
-          <text x="765" y="186" text-anchor="middle" class="d-ok">durable</text>
+  <rect x="335" y="60" width="230" height="150" rx="12" fill="var(--card)" stroke="var(--bad)" stroke-dasharray="4 3" />
+  <text x="450" y="88" text-anchor="middle" class="d-title">Relay</text>
+  <text x="450" y="112" text-anchor="middle" class="d-sub">two live sockets</text>
+  <text x="450" y="134" text-anchor="middle" class="d-sub">a role tag per socket</text>
+  <text x="450" y="156" text-anchor="middle" class="d-sub">nothing else, ever</text>
+  <text x="450" y="186" text-anchor="middle" class="d-bad">amnesiac</text>
 
-          <text x="450" y="34" text-anchor="middle" class="d-sub">
-            Unpairing deletes two keychain entries. There is nothing in the middle to delete.
-          </text>
-          <text x="450" y="240" text-anchor="middle" class="d-tiny">
-            When the last socket closes the relay instance is evicted — and eviction is the whole
-            cleanup.
-          </text>
-        </svg>
-        <figcaption>
-          All durable state sits on the two devices you own. The middle holds live sockets and
-          nothing else.
-        </figcaption>
-      </figure>
+  <rect x="650" y="60" width="230" height="150" rx="12" fill="var(--card)" stroke="var(--ok)" />
+  <text x="765" y="88" text-anchor="middle" class="d-title">Phone</text>
+  <text x="765" y="112" text-anchor="middle" class="d-sub">keys in Keystore</text>
+  <text x="765" y="134" text-anchor="middle" class="d-sub">mirrored data, file cache</text>
+  <text x="765" y="156" text-anchor="middle" class="d-sub">resume checkpoints</text>
+  <text x="765" y="186" text-anchor="middle" class="d-ok">durable</text>
 
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>State</th>
-              <th>Where it lives</th>
-              <th>Lifetime</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Device keypairs, peer public key, pairing secret</td>
-              <td>OS keychain on each device</td>
-              <td>Until you unpair</td>
-            </tr>
-            <tr>
-              <td>Conversations, configs, files, sync cursors</td>
-              <td>Each app's own local database</td>
-              <td>The product's own data — endpoints, not the pipe</td>
-            </tr>
-            <tr>
-              <td>Session keys</td>
-              <td>Both devices' RAM</td>
-              <td>One connection</td>
-            </tr>
-            <tr>
-              <td>The socket pair and a role tag</td>
-              <td>Relay RAM</td>
-              <td>Dies with the sockets</td>
-            </tr>
-            <tr>
-              <td>Any database, object store, queue or log</td>
-              <td class="bad">Does not exist</td>
-              <td>—</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+  <text x="450" y="34" text-anchor="middle" class="d-sub">Unpairing deletes two keychain entries. There is nothing in the middle to delete.</text>
+  <text x="450" y="240" text-anchor="middle" class="d-tiny">When the last socket closes the relay instance is evicted — and eviction is the whole cleanup.</text>
+</svg><figcaption>All durable state sits on the two devices you own. The middle holds live sockets and nothing else.</figcaption></figure>
 
-      <p>
-        Unpairing is deleting two keychain entries. There is nothing in the cloud to delete because
-        nothing was ever written there — which is also why reconnection is free: there is no
-        server-side session to restore, ever.
-      </p>
+<div class="wrap"><table>
+<thead><tr><th>State</th><th>Where it lives</th><th>Lifetime</th></tr></thead>
+<tbody>
+<tr><td>Device keypairs, peer public key, pairing secret</td><td>OS keychain on each device</td><td>Until you unpair</td></tr>
+<tr><td>Conversations, configs, files, sync cursors</td><td>Each app's own local database</td><td>The product's own data — endpoints, not the pipe</td></tr>
+<tr><td>Session keys</td><td>Both devices' RAM</td><td>One connection</td></tr>
+<tr><td>The socket pair and a role tag</td><td>Relay RAM</td><td>Dies with the sockets</td></tr>
+<tr><td>Any database, object store, queue or log</td><td class="bad">Does not exist</td><td>—</td></tr>
+</tbody></table></div>
 
-      <div class="note good">
-        <strong>Measured, not asserted.</strong> After the example run below moved 249.1 MB through
-        production, the relay's storage meters read <strong>0 B</strong> across every counter — SQL
-        storage, key-value storage, rows read, rows written, storage operations. Compute happened;
-        storage did not.
-      </div>
+<p>Unpairing is deleting two keychain entries. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.</p>
 
-      <h2 id="logs">No logs, no telemetry</h2>
-      <p>
-        Retention has a second face: even without a database, a service can leak everything through
-        its logs. This one is configured so there is nothing to leak, and the settings live in
-        version control so every deploy re-asserts them.
-      </p>
+<div class="note good"><strong>Measured, not asserted.</strong> After the example run below moved 249.1 MB through production, the relay's storage meters read <strong>0 B</strong> across every counter — SQL storage, key-value storage, rows read, rows written, storage operations. Compute happened; storage did not.</div>
 
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Surface</th>
-              <th>State</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Worker logs and traces</td>
-              <td class="ok">
-                Disabled in <code>wrangler.jsonc</code> (<code>observability.enabled = false</code>)
-              </td>
-            </tr>
-            <tr>
-              <td>Log export (Logpush)</td>
-              <td class="ok">No jobs configured</td>
-            </tr>
-            <tr>
-              <td><code>console.log</code> anywhere in the source</td>
-              <td class="ok">Not a single one</td>
-            </tr>
-            <tr>
-              <td>Error-tracking or analytics SDK</td>
-              <td class="ok">None — the Worker has no dependencies at runtime</td>
-            </tr>
-            <tr>
-              <td>Storage bindings (KV, D1, R2, queues, analytics engine)</td>
-              <td class="ok">None — the only binding is the Durable Object itself</td>
-            </tr>
-            <tr>
-              <td>Build-tool telemetry</td>
-              <td class="ok">Off (<code>send_metrics: false</code>)</td>
-            </tr>
-            <tr>
-              <td>Browser telemetry headers (NEL / report-to)</td>
-              <td class="ok">Switched off at the zone</td>
-            </tr>
-            <tr>
-              <td>Tail workers (a covert log path)</td>
-              <td class="ok">None connected</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h2 id="logs">No logs, no telemetry</h2>
+<p>Retention has a second face: even without a database, a service can leak everything through its logs. This one is configured so there is nothing to leak, and the settings live in version control so every deploy re-asserts them.</p>
 
-      <p>
-        What remains, honestly: the platform's own aggregate request counters, and TLS terminating
-        at the edge — as it does for any hosted service. Neither exposes content, because what
-        crosses the edge is already ciphertext sealed on your devices. If that residual matters to
-        you, the design's answer is the last section: run the relay yourself.
-      </p>
+<div class="wrap"><table>
+<thead><tr><th>Surface</th><th>State</th></tr></thead>
+<tbody>
+<tr><td>Worker logs and traces</td><td class="ok">Disabled in <code>wrangler.jsonc</code> (<code>observability.enabled = false</code>)</td></tr>
+<tr><td>Log export (Logpush)</td><td class="ok">No jobs configured</td></tr>
+<tr><td><code>console.log</code> anywhere in the source</td><td class="ok">Not a single one</td></tr>
+<tr><td>Error-tracking or analytics SDK</td><td class="ok">None — the Worker has no dependencies at runtime</td></tr>
+<tr><td>Storage bindings (KV, D1, R2, queues, analytics engine)</td><td class="ok">None — the only binding is the Durable Object itself</td></tr>
+<tr><td>Build-tool telemetry</td><td class="ok">Off (<code>send_metrics: false</code>)</td></tr>
+<tr><td>Browser telemetry headers (NEL / report-to)</td><td class="ok">Switched off at the zone</td></tr>
+<tr><td>Tail workers (a covert log path)</td><td class="ok">None connected</td></tr>
+</tbody></table></div>
 
-      <h2 id="run">Example run</h2>
-      <p class="muted">
-        Generated 2026-08-02T22:37:35.556Z · a real cycle against
-        <code>wss://relay.wolffi.sh</code>, not a simulation. Reproduce it with
-        <code>npm run playground</code>.
-      </p>
+<p>What remains, honestly: the platform's own aggregate request counters, and TLS terminating at the edge — as it does for any hosted service. Neither exposes content, because what crosses the edge is already ciphertext sealed on your devices. If that residual matters to you, the design's answer is the last section: run the relay yourself.</p>
 
-      <div class="cards">
-        <div class="card">
-          <div class="k">Checks</div>
-          <div class="v ok">55/55</div>
-        </div>
-        <div class="card">
-          <div class="k">Files delivered</div>
-          <div class="v">12</div>
-        </div>
-        <div class="card">
-          <div class="k">Payload moved</div>
-          <div class="v">249.1 MB</div>
-        </div>
-        <div class="card">
-          <div class="k">Sealed frames</div>
-          <div class="v">1,205</div>
-        </div>
-        <div class="card">
-          <div class="k">Handshake</div>
-          <div class="v">411 ms</div>
-        </div>
-        <div class="card">
-          <div class="k">Wall clock</div>
-          <div class="v">5m 12s</div>
-        </div>
-      </div>
+<h2 id="run">Example run</h2>
+<p class="muted">Generated 2026-08-02T22:37:35.556Z · a real cycle against <code>wss://relay.wolffi.sh</code>, not a simulation. Reproduce it with <code>npm run playground</code>.</p>
 
-      <p>
-        One run drives the whole lifecycle the way the apps will: it stages real data from a live
-        Wolffish workspace, pairs by QR, hand-shakes, audits the wire, tries to break in, syncs
-        configuration and conversations, streams a real agent turn, and moves files — including a
-        248 MB PDF that is deliberately interrupted mid-flight to prove resume.
-      </p>
+<div class="cards">
+  <div class="card"><div class="k">Checks</div><div class="v ok">55/55</div></div>
+  <div class="card"><div class="k">Files delivered</div><div class="v">12</div></div>
+  <div class="card"><div class="k">Payload moved</div><div class="v">249.1 MB</div></div>
+  <div class="card"><div class="k">Sealed frames</div><div class="v">1,205</div></div>
+  <div class="card"><div class="k">Handshake</div><div class="v">411 ms</div></div>
+  <div class="card"><div class="k">Wall clock</div><div class="v">5m 12s</div></div>
+</div>
 
-      <h3>The big one — miller.pdf</h3>
-      <div class="flow">
-        <div class="node">
-          <div class="t">Desktop</div>
-          <div class="p">248.1 MB</div>
-          <div class="p">source of truth</div>
-        </div>
-        <div class="arrow">
-          ── sealed, chunked ──▶<br />0.94 MB/s (8 Mbps)<br />4m 23s · resumed at chunk 160
-        </div>
-        <div class="node">
-          <div class="t">Phone</div>
-          <div class="p">248.1 MB</div>
-          <div class="p ok">sha256 verified identical</div>
-        </div>
-      </div>
-      <p class="muted" style="font-size: 0.9rem">
-        The phone's socket was terminated outright partway through. It reconnected, ran a fresh
-        handshake, asked to continue from its checkpoint, and finished — with the final hash
-        matching the source byte for byte.
-      </p>
+<p>One run drives the whole lifecycle the way the apps will: it stages real data from a live Wolffish workspace, pairs by QR, hand-shakes, audits the wire, tries to break in, syncs configuration and conversations, streams a real agent turn, and moves files — including a 248 MB PDF that is deliberately interrupted mid-flight to prove resume.</p>
 
-      <h3>Phases</h3>
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Phase</th>
-              <th>What it proves</th>
-              <th class="num">Checks</th>
-              <th class="num">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Stage from the published demo dataset</td>
-              <td class="muted">manifest, conversations, config and files — all from the CDN</td>
-              <td class="num ok">4/4</td>
-              <td class="num">29.3 s</td>
-            </tr>
-            <tr>
-              <td>Pair by QR code</td>
-              <td class="muted">desktop shows, mobile scans, both derive the same rendezvous ID</td>
-              <td class="num ok">3/3</td>
-              <td class="num">43 ms</td>
-            </tr>
-            <tr>
-              <td>Connect and hand-shake</td>
-              <td class="muted">Noise IKpsk2 over the live relay</td>
-              <td class="num ok">4/4</td>
-              <td class="num">1.7 s</td>
-            </tr>
-            <tr>
-              <td>Prove the wire is opaque</td>
-              <td class="muted">ciphertext audit on live frames plus integrity probes</td>
-              <td class="num ok">7/7</td>
-              <td class="num">218 ms</td>
-            </tr>
-            <tr>
-              <td>Resist intruders</td>
-              <td class="muted">wrong rendezvous ID, and a scanner-less impostor</td>
-              <td class="num ok">5/5</td>
-              <td class="num">5.2 s</td>
-            </tr>
-            <tr>
-              <td>Sync configuration</td>
-              <td class="muted">the desktop config.json, projected for a phone</td>
-              <td class="num ok">3/3</td>
-              <td class="num">388 ms</td>
-            </tr>
-            <tr>
-              <td>Sync conversations</td>
-              <td class="muted">index first, then full bodies on demand</td>
-              <td class="num ok">2/2</td>
-              <td class="num">1.7 s</td>
-            </tr>
-            <tr>
-              <td>Run a live conversation</td>
-              <td class="muted">mobile asks, desktop streams a real agent turn back</td>
-              <td class="num ok">3/3</td>
-              <td class="num">696 ms</td>
-            </tr>
-            <tr>
-              <td>Move files</td>
-              <td class="muted">published sample files plus deliberately awkward ones</td>
-              <td class="num ok">12/12</td>
-              <td class="num">7.3 s</td>
-            </tr>
-            <tr>
-              <td>Reverse direction — the phone serves the desktop</td>
-              <td class="muted">device tools, a remote invocation, and an upload</td>
-              <td class="num ok">6/6</td>
-              <td class="num">2.2 s</td>
-            </tr>
-            <tr>
-              <td>Move the 248 MB PDF, and survive a dropout</td>
-              <td class="muted">the phone loses signal mid-transfer and resumes</td>
-              <td class="num ok">4/4</td>
-              <td class="num">4m 23s</td>
-            </tr>
-            <tr>
-              <td>Verify delivery</td>
-              <td class="muted">compare every artifact on both sides</td>
-              <td class="num ok">2/2</td>
-              <td class="num">276 ms</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h3>The big one — miller.pdf</h3>
+<div class="flow">
+  <div class="node"><div class="t">Desktop</div><div class="p">248.1 MB</div><div class="p">source of truth</div></div>
+  <div class="arrow">── sealed, chunked ──▶<br />0.94 MB/s (8 Mbps)<br />4m 23s · resumed at chunk 160</div>
+  <div class="node"><div class="t">Phone</div><div class="p">248.1 MB</div><div class="p ok">sha256 verified identical</div></div>
+</div>
+<p class="muted" style="font-size:.9rem">The phone's socket was terminated outright partway through. It reconnected, ran a fresh handshake, asked to continue from its checkpoint, and finished — with the final hash matching the source byte for byte.</p>
 
-      <h3>Transfers</h3>
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Origin</th>
-              <th class="num">Size</th>
-              <th class="num">Time</th>
-              <th class="num">Throughput</th>
-              <th>Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>wolffish-sample.png</code></td>
-              <td class="muted">samples/png</td>
-              <td class="num">35.7 KB</td>
-              <td class="num">547 ms</td>
-              <td class="num">0.06 MB/s (1 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.md</code></td>
-              <td class="muted">samples/md</td>
-              <td class="num">550 B</td>
-              <td class="num">518 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.json</code></td>
-              <td class="muted">samples/json</td>
-              <td class="num">497 B</td>
-              <td class="num">465 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.html</code></td>
-              <td class="muted">samples/html</td>
-              <td class="num">773 B</td>
-              <td class="num">477 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.pdf</code></td>
-              <td class="muted">samples/pdf</td>
-              <td class="num">56.8 KB</td>
-              <td class="num">514 ms</td>
-              <td class="num">0.11 MB/s (1 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.gif</code></td>
-              <td class="muted">samples/gif</td>
-              <td class="num">28.1 KB</td>
-              <td class="num">684 ms</td>
-              <td class="num">0.04 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.mp4</code></td>
-              <td class="muted">samples/mp4</td>
-              <td class="num">629.8 KB</td>
-              <td class="num">1.5 s</td>
-              <td class="num">0.42 MB/s (3 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>wolffish-sample.docx</code></td>
-              <td class="muted">samples/docx</td>
-              <td class="num">4.3 KB</td>
-              <td class="num">705 ms</td>
-              <td class="num">0.01 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>empty-marker.txt</code></td>
-              <td class="muted">generated (zero-byte edge case)</td>
-              <td class="num">0 B</td>
-              <td class="num">229 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>تقرير-المزامنة-٢٠٢٦.txt</code></td>
-              <td class="muted">generated (RTL filename edge case)</td>
-              <td class="num">140 B</td>
-              <td class="num">438 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>chunk-boundary.bin</code></td>
-              <td class="muted">generated (chunk-boundary edge case)</td>
-              <td class="num">256.0 KB</td>
-              <td class="num">1.2 s</td>
-              <td class="num">0.21 MB/s (2 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>camera-capture.jpg</code></td>
-              <td class="muted">phone camera roll → desktop</td>
-              <td class="num">59.2 KB</td>
-              <td class="num">955 ms</td>
-              <td class="num">0.06 MB/s (1 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>voice-memo.md</code></td>
-              <td class="muted">phone recording → desktop</td>
-              <td class="num">141 B</td>
-              <td class="num">551 ms</td>
-              <td class="num">0.00 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>miller.pdf</code></td>
-              <td class="muted">cdn.wolffi.sh/generic/miller.pdf</td>
-              <td class="num">248.1 MB</td>
-              <td class="num">4m 23s</td>
-              <td class="num">0.94 MB/s (8 Mbps)</td>
-              <td class="ok">delivered · resumed</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="muted" style="font-size: 0.88rem">
-        Both endpoints run on one machine during the example, sharing a single uplink — read these
-        as a floor, not a ceiling. Small files are latency-bound (two protocol round trips before
-        the first byte); large files are bandwidth-bound.
-      </p>
+<h3>Phases</h3>
+<div class="wrap"><table>
+<thead><tr><th>Phase</th><th>What it proves</th><th class="num">Checks</th><th class="num">Time</th></tr></thead>
+<tbody>
+<tr><td>Stage from the published demo dataset</td><td class="muted">manifest, conversations, config and files — all from the CDN</td>
+  <td class="num ok">4/4</td>
+  <td class="num">29.3 s</td></tr>
+<tr><td>Pair by QR code</td><td class="muted">desktop shows, mobile scans, both derive the same rendezvous ID</td>
+  <td class="num ok">3/3</td>
+  <td class="num">43 ms</td></tr>
+<tr><td>Connect and hand-shake</td><td class="muted">Noise IKpsk2 over the live relay</td>
+  <td class="num ok">4/4</td>
+  <td class="num">1.7 s</td></tr>
+<tr><td>Prove the wire is opaque</td><td class="muted">ciphertext audit on live frames plus integrity probes</td>
+  <td class="num ok">7/7</td>
+  <td class="num">218 ms</td></tr>
+<tr><td>Resist intruders</td><td class="muted">wrong rendezvous ID, and a scanner-less impostor</td>
+  <td class="num ok">5/5</td>
+  <td class="num">5.2 s</td></tr>
+<tr><td>Sync configuration</td><td class="muted">the desktop config.json, projected for a phone</td>
+  <td class="num ok">3/3</td>
+  <td class="num">388 ms</td></tr>
+<tr><td>Sync conversations</td><td class="muted">index first, then full bodies on demand</td>
+  <td class="num ok">2/2</td>
+  <td class="num">1.7 s</td></tr>
+<tr><td>Run a live conversation</td><td class="muted">mobile asks, desktop streams a real agent turn back</td>
+  <td class="num ok">3/3</td>
+  <td class="num">696 ms</td></tr>
+<tr><td>Move files</td><td class="muted">published sample files plus deliberately awkward ones</td>
+  <td class="num ok">12/12</td>
+  <td class="num">7.3 s</td></tr>
+<tr><td>Reverse direction — the phone serves the desktop</td><td class="muted">device tools, a remote invocation, and an upload</td>
+  <td class="num ok">6/6</td>
+  <td class="num">2.2 s</td></tr>
+<tr><td>Move the 248 MB PDF, and survive a dropout</td><td class="muted">the phone loses signal mid-transfer and resumes</td>
+  <td class="num ok">4/4</td>
+  <td class="num">4m 23s</td></tr>
+<tr><td>Verify delivery</td><td class="muted">compare every artifact on both sides</td>
+  <td class="num ok">2/2</td>
+  <td class="num">276 ms</td></tr>
+</tbody></table></div>
 
-      <h3>What the relay actually carried</h3>
-      <p>
-        These are the first bytes of real frames, captured at the socket boundary — exactly the
-        bytes the relay forwarded during this run.
-      </p>
-      <div class="wrap">
-        <pre>
-guest→relay         152 B  noise msg1     011ef75ee1828c8305a40ea552bc90debaa73c4ec70c3e80c28a41f4811eed8f64cf347f0a979d71b9c36e5bfe6ab96f…
+<h3>Transfers</h3>
+<div class="wrap"><table>
+<thead><tr><th>File</th><th>Origin</th><th class="num">Size</th><th class="num">Time</th><th class="num">Throughput</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td><code>wolffish-sample.png</code></td><td class="muted">samples/png</td>
+  <td class="num">35.7 KB</td><td class="num">547 ms</td><td class="num">0.06 MB/s (1 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.md</code></td><td class="muted">samples/md</td>
+  <td class="num">550 B</td><td class="num">518 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.json</code></td><td class="muted">samples/json</td>
+  <td class="num">497 B</td><td class="num">465 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.html</code></td><td class="muted">samples/html</td>
+  <td class="num">773 B</td><td class="num">477 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.pdf</code></td><td class="muted">samples/pdf</td>
+  <td class="num">56.8 KB</td><td class="num">514 ms</td><td class="num">0.11 MB/s (1 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.gif</code></td><td class="muted">samples/gif</td>
+  <td class="num">28.1 KB</td><td class="num">684 ms</td><td class="num">0.04 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.mp4</code></td><td class="muted">samples/mp4</td>
+  <td class="num">629.8 KB</td><td class="num">1.5 s</td><td class="num">0.42 MB/s (3 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>wolffish-sample.docx</code></td><td class="muted">samples/docx</td>
+  <td class="num">4.3 KB</td><td class="num">705 ms</td><td class="num">0.01 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>empty-marker.txt</code></td><td class="muted">generated (zero-byte edge case)</td>
+  <td class="num">0 B</td><td class="num">229 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>تقرير-المزامنة-٢٠٢٦.txt</code></td><td class="muted">generated (RTL filename edge case)</td>
+  <td class="num">140 B</td><td class="num">438 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>chunk-boundary.bin</code></td><td class="muted">generated (chunk-boundary edge case)</td>
+  <td class="num">256.0 KB</td><td class="num">1.2 s</td><td class="num">0.21 MB/s (2 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>camera-capture.jpg</code></td><td class="muted">phone camera roll → desktop</td>
+  <td class="num">59.2 KB</td><td class="num">955 ms</td><td class="num">0.06 MB/s (1 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>voice-memo.md</code></td><td class="muted">phone recording → desktop</td>
+  <td class="num">141 B</td><td class="num">551 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="ok">delivered</td></tr>
+<tr><td><code>miller.pdf</code></td><td class="muted">cdn.wolffi.sh/generic/miller.pdf</td>
+  <td class="num">248.1 MB</td><td class="num">4m 23s</td><td class="num">0.94 MB/s (8 Mbps)</td>
+  <td class="ok">delivered · resumed</td></tr>
+</tbody></table></div>
+<p class="muted" style="font-size:.88rem">Both endpoints run on one machine during the example, sharing a single uplink — read these as a floor, not a ceiling. Small files are latency-bound (two protocol round trips before the first byte); large files are bandwidth-bound.</p>
+
+<h3>What the relay actually carried</h3>
+<p>These are the first bytes of real frames, captured at the socket boundary — exactly the bytes the relay forwarded during this run.</p>
+<div class="wrap"><pre>guest→relay         152 B  noise msg1     011ef75ee1828c8305a40ea552bc90debaa73c4ec70c3e80c28a41f4811eed8f64cf347f0a979d71b9c36e5bfe6ab96f…
 host→relay          104 B  noise msg2     015dc9bc797d656790a9a383ffced901dc37bd5a387b752f5d235ffe9bcc86a81388b2d94ddc5a4fac972e91c6b7616a…
 guest→relay          62 B  RPC_REQ        029ccfb207550f165d9c936709bb72c53187ba31e713e1c3f2f68e760cdf2db2741b9347a09b3878a950648f8e8992c8…
-host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b5945163fbe7f83af294daf09220b440ea82708c63263981385202352ab88a79354…</pre>
-      </div>
-      <p>
-        Across 4 frames and 456 B, the captured ciphertext measures
-        <strong>7.545 bits per byte</strong> of entropy — 8.0 is indistinguishable from random
-        noise. No plaintext marker searched for appears anywhere in it, including the
-        <code>%PDF</code> header of the file being transferred at the time.
-      </p>
+host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b5945163fbe7f83af294daf09220b440ea82708c63263981385202352ab88a79354…</pre></div>
+<p>Across 4 frames and 456 B, the captured ciphertext measures <strong>7.545 bits per byte</strong> of entropy — 8.0 is indistinguishable from random noise. No plaintext marker searched for appears anywhere in it, including the <code>%PDF</code> header of the file being transferred at the time.</p>
 
-      <h3>Every check</h3>
-      <div class="wrap">
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Assertion</th>
-              <th>Detail</th>
-              <th>Phase</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="ok">✓</td>
-              <td>demo manifest fetched from the CDN</td>
-              <td class="muted">version 025fc50bc5f8</td>
-              <td class="muted">Stage from the published demo dataset</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>demo conversations loaded</td>
-              <td class="muted">12</td>
-              <td class="muted">Stage from the published demo dataset</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>file spread staged</td>
-              <td class="muted">11 files</td>
-              <td class="muted">Stage from the published demo dataset</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>large PDF staged</td>
-              <td class="muted">248.1 MB</td>
-              <td class="muted">Stage from the published demo dataset</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>QR carries the desktop static key</td>
-              <td class="muted"></td>
-              <td class="muted">Pair by QR code</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>both sides derive the same rendezvous ID</td>
-              <td class="muted">2356b96373548bbd…</td>
-              <td class="muted">Pair by QR code</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>rendezvous ID is 256-bit lowercase hex</td>
-              <td class="muted"></td>
-              <td class="muted">Pair by QR code</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>desktop pinned the real mobile static key</td>
-              <td class="muted"></td>
-              <td class="muted">Connect and hand-shake</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>both sides agree on the handshake transcript hash</td>
-              <td class="muted">0e473307131a6564ec7af8a1…</td>
-              <td class="muted">Connect and hand-shake</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>desktop identity received by mobile</td>
-              <td class="muted"></td>
-              <td class="muted">Connect and hand-shake</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>mobile identity received by desktop</td>
-              <td class="muted"></td>
-              <td class="muted">Connect and hand-shake</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>RPC round-trip over the encrypted tunnel</td>
-              <td class="muted"></td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>no plaintext markers found in captured ciphertext</td>
-              <td class="muted">5 needles searched</td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>captured frames are high-entropy</td>
-              <td class="muted">7.545 bits/byte over 456 B</td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>sealed frame does not contain its plaintext</td>
-              <td class="muted"></td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>a single flipped bit fails authentication</td>
-              <td class="muted"></td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>the wrong key cannot open a frame</td>
-              <td class="muted"></td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>the right key round-trips exactly</td>
-              <td class="muted"></td>
-              <td class="muted">Prove the wire is opaque</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>a socket on another rendezvous ID receives nothing</td>
-              <td class="muted"></td>
-              <td class="muted">Resist intruders</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>impostor cannot finish the handshake without the QR secret</td>
-              <td class="muted">knowing the rendezvous ID is not enough</td>
-              <td class="muted">Resist intruders</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>impostor derived no session keys — it can neither read nor write</td>
-              <td class="muted"></td>
-              <td class="muted">Resist intruders</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>forged frames are rejected — the impostor cannot drive the desktop</td>
-              <td class="muted">responder keys exist but nothing authenticates against them</td>
-              <td class="muted">Resist intruders</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>the real session survived the probes</td>
-              <td class="muted"></td>
-              <td class="muted">Resist intruders</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>every config section arrived</td>
-              <td class="muted">12 sections in 388 ms</td>
-              <td class="muted">Sync configuration</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>credentials were replaced before leaving the desktop</td>
-              <td class="muted"></td>
-              <td class="muted">Sync configuration</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>demo settings survived the trip</td>
-              <td class="muted">33 capabilities · 11 services</td>
-              <td class="muted">Sync configuration</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>conversation index delivered</td>
-              <td class="muted">12/12</td>
-              <td class="muted">Sync conversations</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>conversation bodies match the desktop byte for byte</td>
-              <td class="muted">6/6</td>
-              <td class="muted">Sync conversations</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>agent streamed deltas to the phone</td>
-              <td class="muted">7 events</td>
-              <td class="muted">Run a live conversation</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>streamed transcript reassembled exactly</td>
-              <td class="muted">1812 chars</td>
-              <td class="muted">Run a live conversation</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>tool-run event delivered</td>
-              <td class="muted"></td>
-              <td class="muted">Run a live conversation</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.png</td>
-              <td class="muted">35.7 KB · 547 ms · 0.06 MB/s (1 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.md</td>
-              <td class="muted">550 B · 518 ms · 0.00 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.json</td>
-              <td class="muted">497 B · 465 ms · 0.00 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.html</td>
-              <td class="muted">773 B · 477 ms · 0.00 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.pdf</td>
-              <td class="muted">56.8 KB · 514 ms · 0.11 MB/s (1 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.gif</td>
-              <td class="muted">28.1 KB · 684 ms · 0.04 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.mp4</td>
-              <td class="muted">629.8 KB · 1.5 s · 0.42 MB/s (3 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered wolffish-sample.docx</td>
-              <td class="muted">4.3 KB · 705 ms · 0.01 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered empty-marker.txt</td>
-              <td class="muted">0 B · 229 ms · 0.00 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered تقرير-المزامنة-٢٠٢٦.txt</td>
-              <td class="muted">140 B · 438 ms · 0.00 MB/s (0 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered chunk-boundary.bin</td>
-              <td class="muted">256.0 KB · 1.2 s · 0.21 MB/s (2 Mbps)</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>every file completed on the mobile side</td>
-              <td class="muted">11/11</td>
-              <td class="muted">Move files</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>desktop fetched the phone&#39;s own tool definitions</td>
-              <td class="muted"></td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>desktop read live device status from the phone</td>
-              <td class="muted">battery 72% · cellular</td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>desktop invoked a tool that only the phone can run</td>
-              <td class="muted"></td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>phone uploaded camera-capture.jpg</td>
-              <td class="muted">59.2 KB · 955 ms</td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>phone uploaded voice-memo.md</td>
-              <td class="muted">141 B · 551 ms</td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>uploads are byte-identical on the desktop</td>
-              <td class="muted">2/2</td>
-              <td class="muted">Reverse direction — the phone serves the desktop</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>the transfer really was interrupted mid-flight</td>
-              <td class="muted"></td>
-              <td class="muted">Move the 248 MB PDF, and survive a dropout</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>transfer resumed from a checkpoint, not from zero</td>
-              <td class="muted">chunk 160</td>
-              <td class="muted">Move the 248 MB PDF, and survive a dropout</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>delivered size matches</td>
-              <td class="muted">248.1 MB</td>
-              <td class="muted">Move the 248 MB PDF, and survive a dropout</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>sha256 matches end to end</td>
-              <td class="muted">2ddd71a4a8fce8272e4073db…</td>
-              <td class="muted">Move the 248 MB PDF, and survive a dropout</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>every desktop file is byte-identical on the phone</td>
-              <td class="muted">12/12</td>
-              <td class="muted">Verify delivery</td>
-            </tr>
-            <tr>
-              <td class="ok">✓</td>
-              <td>no partial files left behind</td>
-              <td class="muted">0 stragglers</td>
-              <td class="muted">Verify delivery</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+<h3>Every check</h3>
+<div class="wrap"><table>
+<thead><tr><th></th><th>Assertion</th><th>Detail</th><th>Phase</th></tr></thead>
+<tbody>
+<tr><td class="ok">✓</td><td>demo manifest fetched from the CDN</td>
+  <td class="muted">version 025fc50bc5f8</td><td class="muted">Stage from the published demo dataset</td></tr>
+<tr><td class="ok">✓</td><td>demo conversations loaded</td>
+  <td class="muted">12</td><td class="muted">Stage from the published demo dataset</td></tr>
+<tr><td class="ok">✓</td><td>file spread staged</td>
+  <td class="muted">11 files</td><td class="muted">Stage from the published demo dataset</td></tr>
+<tr><td class="ok">✓</td><td>large PDF staged</td>
+  <td class="muted">248.1 MB</td><td class="muted">Stage from the published demo dataset</td></tr>
+<tr><td class="ok">✓</td><td>QR carries the desktop static key</td>
+  <td class="muted"></td><td class="muted">Pair by QR code</td></tr>
+<tr><td class="ok">✓</td><td>both sides derive the same rendezvous ID</td>
+  <td class="muted">2356b96373548bbd…</td><td class="muted">Pair by QR code</td></tr>
+<tr><td class="ok">✓</td><td>rendezvous ID is 256-bit lowercase hex</td>
+  <td class="muted"></td><td class="muted">Pair by QR code</td></tr>
+<tr><td class="ok">✓</td><td>desktop pinned the real mobile static key</td>
+  <td class="muted"></td><td class="muted">Connect and hand-shake</td></tr>
+<tr><td class="ok">✓</td><td>both sides agree on the handshake transcript hash</td>
+  <td class="muted">0e473307131a6564ec7af8a1…</td><td class="muted">Connect and hand-shake</td></tr>
+<tr><td class="ok">✓</td><td>desktop identity received by mobile</td>
+  <td class="muted"></td><td class="muted">Connect and hand-shake</td></tr>
+<tr><td class="ok">✓</td><td>mobile identity received by desktop</td>
+  <td class="muted"></td><td class="muted">Connect and hand-shake</td></tr>
+<tr><td class="ok">✓</td><td>RPC round-trip over the encrypted tunnel</td>
+  <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>no plaintext markers found in captured ciphertext</td>
+  <td class="muted">5 needles searched</td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>captured frames are high-entropy</td>
+  <td class="muted">7.545 bits/byte over 456 B</td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>sealed frame does not contain its plaintext</td>
+  <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>a single flipped bit fails authentication</td>
+  <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>the wrong key cannot open a frame</td>
+  <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>the right key round-trips exactly</td>
+  <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>a socket on another rendezvous ID receives nothing</td>
+  <td class="muted"></td><td class="muted">Resist intruders</td></tr>
+<tr><td class="ok">✓</td><td>impostor cannot finish the handshake without the QR secret</td>
+  <td class="muted">knowing the rendezvous ID is not enough</td><td class="muted">Resist intruders</td></tr>
+<tr><td class="ok">✓</td><td>impostor derived no session keys — it can neither read nor write</td>
+  <td class="muted"></td><td class="muted">Resist intruders</td></tr>
+<tr><td class="ok">✓</td><td>forged frames are rejected — the impostor cannot drive the desktop</td>
+  <td class="muted">responder keys exist but nothing authenticates against them</td><td class="muted">Resist intruders</td></tr>
+<tr><td class="ok">✓</td><td>the real session survived the probes</td>
+  <td class="muted"></td><td class="muted">Resist intruders</td></tr>
+<tr><td class="ok">✓</td><td>every config section arrived</td>
+  <td class="muted">12 sections in 388 ms</td><td class="muted">Sync configuration</td></tr>
+<tr><td class="ok">✓</td><td>credentials were replaced before leaving the desktop</td>
+  <td class="muted"></td><td class="muted">Sync configuration</td></tr>
+<tr><td class="ok">✓</td><td>demo settings survived the trip</td>
+  <td class="muted">33 capabilities · 11 services</td><td class="muted">Sync configuration</td></tr>
+<tr><td class="ok">✓</td><td>conversation index delivered</td>
+  <td class="muted">12/12</td><td class="muted">Sync conversations</td></tr>
+<tr><td class="ok">✓</td><td>conversation bodies match the desktop byte for byte</td>
+  <td class="muted">6/6</td><td class="muted">Sync conversations</td></tr>
+<tr><td class="ok">✓</td><td>agent streamed deltas to the phone</td>
+  <td class="muted">7 events</td><td class="muted">Run a live conversation</td></tr>
+<tr><td class="ok">✓</td><td>streamed transcript reassembled exactly</td>
+  <td class="muted">1812 chars</td><td class="muted">Run a live conversation</td></tr>
+<tr><td class="ok">✓</td><td>tool-run event delivered</td>
+  <td class="muted"></td><td class="muted">Run a live conversation</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.png</td>
+  <td class="muted">35.7 KB · 547 ms · 0.06 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.md</td>
+  <td class="muted">550 B · 518 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.json</td>
+  <td class="muted">497 B · 465 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.html</td>
+  <td class="muted">773 B · 477 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.pdf</td>
+  <td class="muted">56.8 KB · 514 ms · 0.11 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.gif</td>
+  <td class="muted">28.1 KB · 684 ms · 0.04 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.mp4</td>
+  <td class="muted">629.8 KB · 1.5 s · 0.42 MB/s (3 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered wolffish-sample.docx</td>
+  <td class="muted">4.3 KB · 705 ms · 0.01 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered empty-marker.txt</td>
+  <td class="muted">0 B · 229 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered تقرير-المزامنة-٢٠٢٦.txt</td>
+  <td class="muted">140 B · 438 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>delivered chunk-boundary.bin</td>
+  <td class="muted">256.0 KB · 1.2 s · 0.21 MB/s (2 Mbps)</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>every file completed on the mobile side</td>
+  <td class="muted">11/11</td><td class="muted">Move files</td></tr>
+<tr><td class="ok">✓</td><td>desktop fetched the phone&#39;s own tool definitions</td>
+  <td class="muted"></td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>desktop read live device status from the phone</td>
+  <td class="muted">battery 72% · cellular</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>desktop invoked a tool that only the phone can run</td>
+  <td class="muted"></td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>phone uploaded camera-capture.jpg</td>
+  <td class="muted">59.2 KB · 955 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>phone uploaded voice-memo.md</td>
+  <td class="muted">141 B · 551 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>uploads are byte-identical on the desktop</td>
+  <td class="muted">2/2</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+<tr><td class="ok">✓</td><td>the transfer really was interrupted mid-flight</td>
+  <td class="muted"></td><td class="muted">Move the 248 MB PDF, and survive a dropout</td></tr>
+<tr><td class="ok">✓</td><td>transfer resumed from a checkpoint, not from zero</td>
+  <td class="muted">chunk 160</td><td class="muted">Move the 248 MB PDF, and survive a dropout</td></tr>
+<tr><td class="ok">✓</td><td>delivered size matches</td>
+  <td class="muted">248.1 MB</td><td class="muted">Move the 248 MB PDF, and survive a dropout</td></tr>
+<tr><td class="ok">✓</td><td>sha256 matches end to end</td>
+  <td class="muted">2ddd71a4a8fce8272e4073db…</td><td class="muted">Move the 248 MB PDF, and survive a dropout</td></tr>
+<tr><td class="ok">✓</td><td>every desktop file is byte-identical on the phone</td>
+  <td class="muted">12/12</td><td class="muted">Verify delivery</td></tr>
+<tr><td class="ok">✓</td><td>no partial files left behind</td>
+  <td class="muted">0 stragglers</td><td class="muted">Verify delivery</td></tr>
+</tbody></table></div>
 
-      <h2 id="selfhost">Run your own relay</h2>
-      <p>
-        The desktop and mobile apps let you point at any relay, because the relay URL travels inside
-        the pairing QR. Change it there and the devices meet at your address instead — no other
-        setting, no rebuild.
-      </p>
-      <p>
-        This is deliberate. Content security never depended on the relay's honesty, so swapping in
-        your own costs you nothing and gains you full control of the metadata surface.
-      </p>
+<h2 id="selfhost">Run your own relay</h2>
+<p>The desktop and mobile apps let you point at any relay, because the relay URL travels inside the pairing QR. Change it there and the devices meet at your address instead — no other setting, no rebuild.</p>
+<p>This is deliberate. Content security never depended on the relay's honesty, so swapping in your own costs you nothing and gains you full control of the metadata surface.</p>
 
-      <h3>Option A — your own Cloudflare deployment</h3>
-      <p>The same code, on your account, in about ten minutes.</p>
-      <div class="wrap">
-        <pre>
-# 1. Fork or clone
+<h3>Option A — your own Cloudflare deployment</h3>
+<p>The same code, on your account, in about ten minutes.</p>
+<div class="wrap"><pre># 1. Fork or clone
 git clone https://github.com/thewolffish/wolffish-relay.git
 cd wolffish-relay &amp;&amp; npm install
 
@@ -2036,25 +661,12 @@ npx wrangler login
 npx wrangler deploy
 
 # 4. Check it
-curl https://relay.example.com/healthz    # → ok</pre>
-      </div>
-      <p>
-        To keep the retention guarantees, leave these exactly as they ship:
-        <code>observability.enabled: false</code>, <code>send_metrics: false</code>, no storage
-        bindings, and no Logpush job on the zone. If you deploy from CI instead of a laptop, the
-        included GitHub Actions workflow needs only two secrets — a scoped API token and your
-        account ID.
-      </p>
+curl https://relay.example.com/healthz    # → ok</pre></div>
+<p>To keep the retention guarantees, leave these exactly as they ship: <code>observability.enabled: false</code>, <code>send_metrics: false</code>, no storage bindings, and no Logpush job on the zone. If you deploy from CI instead of a laptop, the included GitHub Actions workflow needs only two secrets — a scoped API token and your account ID.</p>
 
-      <h3>Option B — anywhere that runs Node</h3>
-      <p>
-        Nothing about the relay is Cloudflare-specific: it matches two sockets by name and forwards
-        bytes. Here is the whole thing for a plain Node host, behind any TLS terminator you already
-        run.
-      </p>
-      <div class="wrap">
-        <pre>
-import { WebSocketServer } from &#39;ws&#39;   // npm i ws
+<h3>Option B — anywhere that runs Node</h3>
+<p>Nothing about the relay is Cloudflare-specific: it matches two sockets by name and forwards bytes. Here is the whole thing for a plain Node host, behind any TLS terminator you already run.</p>
+<div class="wrap"><pre>import { WebSocketServer } from &#39;ws&#39;   // npm i ws
 
 const rooms = new Map()                  // rid → { host, guest }   RAM only, never persisted
 const RID = /^[0-9a-f]{64}$/
@@ -2088,25 +700,13 @@ new WebSocketServer({ port: 8787 }).on(&#39;connection&#39;, (ws, req) =&gt; {
     if (peer()?.readyState === 1) peer().send(&#39;{&quot;t&quot;:&quot;peer-gone&quot;}&#39;)
     if (!room.host &amp;&amp; !room.guest) rooms.delete(rid)   // forget everything
   })
-})</pre>
-      </div>
-      <p>
-        That is the complete contract. Serve it over TLS (<code>wss://</code>), keep access logs off
-        if you want the retention story to hold, and make sure your proxy does not buffer or time
-        out WebSocket upgrades.
-      </p>
+})</pre></div>
+<p>That is the complete contract. Serve it over TLS (<code>wss://</code>), keep access logs off if you want the retention story to hold, and make sure your proxy does not buffer or time out WebSocket upgrades.</p>
 
-      <div class="note warn">
-        <strong>If you host it, you own the metadata.</strong> Content stays sealed either way, but
-        connection times, IP addresses and frame sizes pass through your machine. Turn off access
-        logging deliberately — most web servers record every connection by default, which would put
-        back exactly what this design removes.
-      </div>
+<div class="note warn"><strong>If you host it, you own the metadata.</strong> Content stays sealed either way, but connection times, IP addresses and frame sizes pass through your machine. Turn off access logging deliberately — most web servers record every connection by default, which would put back exactly what this design removes.</div>
 
-      <h3>Verifying your relay</h3>
-      <div class="wrap">
-        <pre>
-# health
+<h3>Verifying your relay</h3>
+<div class="wrap"><pre># health
 curl https://relay.example.com/healthz
 
 # two terminals: presence and forwarding
@@ -2115,27 +715,13 @@ npx wscat -c &quot;wss://relay.example.com/t/$(printf &#39;a%.0s&#39; {1..64})?r
 # both should print {&quot;t&quot;:&quot;peer-present&quot;} the moment the second connects
 
 # or drive the whole tunnel against it, end to end
-npm run playground -- --relay wss://relay.example.com</pre>
-      </div>
-      <p>
-        That last command runs the complete cycle in this document — pairing, handshake, ciphertext
-        audit, intrusion probes, file transfer with an interruption, and byte-for-byte verification
-        — against your own deployment, and writes you a report just like this one.
-      </p>
+npm run playground -- --relay wss://relay.example.com</pre></div>
+<p>That last command runs the complete cycle in this document — pairing, handshake, ciphertext audit, intrusion probes, file transfer with an interruption, and byte-for-byte verification — against your own deployment, and writes you a report just like this one.</p>
 
-      <footer>
-        <p>
-          <strong>Wolffish Relay</strong> · MIT ·
-          <a href="https://github.com/thewolffish/wolffish-relay"
-            >github.com/thewolffish/wolffish-relay</a
-          >
-          · <a href="https://wolffi.sh">wolffi.sh</a>
-        </p>
-        <p style="margin-top: 0.4rem">
-          This document is regenerated by <code>npm run playground</code>, so its figures are
-          measurements from a real run rather than claims.
-        </p>
-      </footer>
-    </main>
-  </body>
-</html>
+<footer>
+  <p><strong>Wolffish Relay</strong> · MIT · <a href="https://github.com/thewolffish/wolffish-relay">github.com/thewolffish/wolffish-relay</a> · <a href="https://wolffi.sh">wolffi.sh</a></p>
+  <p style="margin-top:.4rem">Published at <a href="https://cdn.wolffi.sh/generic/relay.html">cdn.wolffi.sh/generic/relay.html</a>. The repository README carries the same material in Markdown.</p>
+  <p style="margin-top:.4rem">This document is regenerated by <code>npm run playground</code>, so its figures are measurements from a real run rather than claims.</p>
+</footer>
+
+</main></body></html>
