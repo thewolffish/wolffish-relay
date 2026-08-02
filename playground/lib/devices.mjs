@@ -36,13 +36,13 @@ export function redactSecrets(value, counter = { count: 0 }) {
 }
 
 export function createDesktop({ tunnel, log, fixtures, desktopDir }) {
-  const { conversations, indexRows, desktopConfig, snapshot } = fixtures
+  const { conversations, indexRows, desktopConfig, manifest } = fixtures
 
   tunnel.onRpc('config.get', async () => {
     const counter = { count: 0 }
     const safe = redactSecrets(desktopConfig, counter)
     log.desktop(`serving config.json (${counter.count} credential fields redacted before send)`)
-    return { config: safe, snapshot: snapshot ? { keys: Object.keys(snapshot) } : null }
+    return { config: safe, dataset: { version: manifest.version, builtAt: manifest.builtAt } }
   })
 
   tunnel.onRpc('conversations.list', async ({ since = 0 } = {}) => {
@@ -59,7 +59,7 @@ export function createDesktop({ tunnel, log, fixtures, desktopDir }) {
 
   tunnel.onRpc('system.check', async () => ({
     ok: true,
-    workspace: '~/.wolffish/workspace',
+    dataset: manifest.version,
     conversations: conversations.length,
     node: process.version,
     at: Date.now()
@@ -138,7 +138,7 @@ export function createMobile({ tunnel, log, mobileDir, outboxDir }) {
   /** The desktop asks the phone for a file the phone alone has. */
   tunnel.onRpc('camera.capture', async ({ name }) => {
     log.mobile(`capture requested — uploading ${name}`)
-    const sent = await tunnel.sendFile(path.join(outboxDir, name), { name, mime: 'image/png' })
+    const sent = await tunnel.sendFile(path.join(outboxDir, name), { name, mime: 'image/jpeg' })
     return { name, ok: sent.ok, bytes: sent.sentBytes, ms: sent.ms }
   })
 

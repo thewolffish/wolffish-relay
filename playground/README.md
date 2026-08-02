@@ -5,6 +5,11 @@ by QR, hand-shakes, and then moves real Wolffish data — configs, conversation
 lists, conversation bodies, a live agent turn, and files up to 248 MB — while
 proving that every byte crossing the relay is ciphertext.
 
+**Every byte comes from the published demo dataset on `cdn.wolffi.sh`** — the
+same manifest, conversation shards, config snapshot and sample files the mobile
+app downloads in demo mode. Nothing is read from a local workspace, so the run
+is identical on any machine that clones this repo and carries no personal data.
+
 This is the harness the protocol package will be built against. The relay itself
 is finished; this is how we keep it honest and how the client protocol gets
 exercised before it goes anywhere near the desktop or mobile apps.
@@ -17,20 +22,20 @@ npm run playground:local    # drive `npm run dev` instead of production
 
 ## What one run does
 
-| Phase                     | What it proves                                                                                                                                                   |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage the desktop replica | Real data from `~/.wolffish/workspace` is copied into a run-local folder that acts as the desktop's source of truth                                              |
-| Pair by QR code           | A scannable PNG is generated, "scanned", and both sides independently derive the same 256-bit rendezvous ID                                                      |
-| Connect and hand-shake    | Noise IKpsk2 over the live relay: mutual authentication, key pinning, forward secrecy, matching transcript hashes                                                |
-| Prove the wire is opaque  | Live captured frames contain no plaintext markers and are high-entropy; flipped bits and wrong keys are rejected; the right key round-trips                      |
-| Resist intruders          | A socket on another rendezvous ID hears nothing; an impostor who knows the rendezvous ID but never scanned the QR cannot complete the handshake or forge a frame |
-| Sync configuration        | The desktop's real `config.json` arrives section-complete, with credentials redacted **before** they leave the desktop                                           |
-| Sync conversations        | Index first, then full bodies on demand — compared byte for byte against the originals                                                                           |
-| Run a live conversation   | A real agent turn streams back as deltas and tool events, reassembled exactly on the phone                                                                       |
-| Reverse direction         | The phone serves the desktop: it advertises its own tools, the desktop invokes one, and the phone uploads files the desktop never had |
-| Move files                | Real workspace files plus deliberate edge cases: a zero-byte file, an Arabic (RTL) filename, and a payload one byte past the chunk boundary                      |
-| Move the 248 MB PDF       | `miller.pdf` transfers while the phone is forcibly disconnected mid-flight, then resumes from its checkpoint and verifies sha256 end to end                      |
-| Verify delivery           | Every file on both sides is hashed and compared; no partial files may remain                                                                                     |
+| Phase                       | What it proves                                                                                                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage from the demo dataset | The CDN manifest, conversation shards, config snapshot and per-type sample files are fetched and staged into a run-local folder that acts as the desktop's source of truth |
+| Pair by QR code             | A scannable PNG is generated, "scanned", and both sides independently derive the same 256-bit rendezvous ID                                                                |
+| Connect and hand-shake      | Noise IKpsk2 over the live relay: mutual authentication, key pinning, forward secrecy, matching transcript hashes                                                          |
+| Prove the wire is opaque    | Live captured frames contain no plaintext markers and are high-entropy; flipped bits and wrong keys are rejected; the right key round-trips                                |
+| Resist intruders            | A socket on another rendezvous ID hears nothing; an impostor who knows the rendezvous ID but never scanned the QR cannot complete the handshake or forge a frame           |
+| Sync configuration          | The desktop's real `config.json` arrives section-complete, with credentials redacted **before** they leave the desktop                                                     |
+| Sync conversations          | Index first, then full bodies on demand — compared byte for byte against the originals                                                                                     |
+| Run a live conversation     | A real agent turn streams back as deltas and tool events, reassembled exactly on the phone                                                                                 |
+| Reverse direction           | The phone serves the desktop: it advertises its own tools, the desktop invokes one, and the phone uploads files the desktop never had                                      |
+| Move files                  | Real workspace files plus deliberate edge cases: a zero-byte file, an Arabic (RTL) filename, and a payload one byte past the chunk boundary                                |
+| Move the 248 MB PDF         | `miller.pdf` transfers while the phone is forcibly disconnected mid-flight, then resumes from its checkpoint and verifies sha256 end to end                                |
+| Verify delivery             | Every file on both sides is hashed and compared; no partial files may remain                                                                                               |
 
 ## What a run leaves behind
 
@@ -102,9 +107,10 @@ New RPC methods or events go in `lib/devices.mjs`; new fixtures in
 - **Both ends run on one machine**, so throughput figures share a single uplink —
   read them as a floor, not a ceiling. Small files are latency-bound (two round
   trips of protocol before the first byte), large files are bandwidth-bound.
-- **`miller.pdf` is cached** in `out/.cache/` after the first run. It is seeded
-  from `~/Documents/miller.pdf` when present, otherwise downloaded from
-  `cdn.wolffi.sh`.
+- **Downloads are cached** in `out/.cache/`, keyed by the manifest version. The
+  first run fetches ~250 MB (mostly `miller.pdf`); later runs are offline-fast.
+  Point `DEMO_BASE_URL` / `SAMPLES_BASE_URL` at a staging bundle to test one.
 - **Credentials never leave the desktop side.** Config sync redacts any
   token/key/secret-shaped field before transmission — a phone has no use for the
-  desktop's API keys, and a test should not clone secrets onto a second device.
+  desktop's API keys. The demo dataset is already anonymised, so this is a
+  belt-and-braces pass that the run asserts is working.

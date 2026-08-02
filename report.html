@@ -389,7 +389,7 @@
           your phone — and cannot read, keep, or log any of it.
         </p>
         <div class="badges">
-          <span class="badge pass"><span class="dot"></span>example run: 52/52 checks passed</span>
+          <span class="badge pass"><span class="dot"></span>example run: 55/55 checks passed</span>
           <span class="badge">MIT</span>
           <span class="badge">Cloudflare Workers</span>
           <span class="badge mono">wss://relay.wolffi.sh</span>
@@ -1290,7 +1290,7 @@
       </p>
 
       <div class="note good">
-        <strong>Measured, not asserted.</strong> After the example run below moved 255.2 MB through
+        <strong>Measured, not asserted.</strong> After the example run below moved 249.1 MB through
         production, the relay's storage meters read <strong>0 B</strong> across every counter — SQL
         storage, key-value storage, rows read, rows written, storage operations. Compute happened;
         storage did not.
@@ -1359,7 +1359,7 @@
 
       <h2 id="run">Example run</h2>
       <p class="muted">
-        Generated 2026-08-02T22:04:44.878Z · a real cycle against
+        Generated 2026-08-02T22:37:35.556Z · a real cycle against
         <code>wss://relay.wolffi.sh</code>, not a simulation. Reproduce it with
         <code>npm run playground</code>.
       </p>
@@ -1367,27 +1367,27 @@
       <div class="cards">
         <div class="card">
           <div class="k">Checks</div>
-          <div class="v ok">52/52</div>
+          <div class="v ok">55/55</div>
         </div>
         <div class="card">
           <div class="k">Files delivered</div>
-          <div class="v">10</div>
+          <div class="v">12</div>
         </div>
         <div class="card">
           <div class="k">Payload moved</div>
-          <div class="v">255.2 MB</div>
+          <div class="v">249.1 MB</div>
         </div>
         <div class="card">
           <div class="k">Sealed frames</div>
-          <div class="v">1,225</div>
+          <div class="v">1,205</div>
         </div>
         <div class="card">
           <div class="k">Handshake</div>
-          <div class="v">262 ms</div>
+          <div class="v">411 ms</div>
         </div>
         <div class="card">
           <div class="k">Wall clock</div>
-          <div class="v">4m 33s</div>
+          <div class="v">5m 12s</div>
         </div>
       </div>
 
@@ -1406,7 +1406,7 @@
           <div class="p">source of truth</div>
         </div>
         <div class="arrow">
-          ── sealed, chunked ──▶<br />1.02 MB/s (9 Mbps)<br />4m 3s · resumed at chunk 160
+          ── sealed, chunked ──▶<br />0.94 MB/s (8 Mbps)<br />4m 23s · resumed at chunk 160
         </div>
         <div class="node">
           <div class="t">Phone</div>
@@ -1433,10 +1433,10 @@
           </thead>
           <tbody>
             <tr>
-              <td>Stage the desktop replica</td>
-              <td class="muted">real config, conversations and files from ~/.wolffish</td>
-              <td class="num ok">3/3</td>
-              <td class="num">176 ms</td>
+              <td>Stage from the published demo dataset</td>
+              <td class="muted">manifest, conversations, config and files — all from the CDN</td>
+              <td class="num ok">4/4</td>
+              <td class="num">29.3 s</td>
             </tr>
             <tr>
               <td>Pair by QR code</td>
@@ -1448,61 +1448,61 @@
               <td>Connect and hand-shake</td>
               <td class="muted">Noise IKpsk2 over the live relay</td>
               <td class="num ok">4/4</td>
-              <td class="num">3.1 s</td>
+              <td class="num">1.7 s</td>
             </tr>
             <tr>
               <td>Prove the wire is opaque</td>
               <td class="muted">ciphertext audit on live frames plus integrity probes</td>
               <td class="num ok">7/7</td>
-              <td class="num">232 ms</td>
+              <td class="num">218 ms</td>
             </tr>
             <tr>
               <td>Resist intruders</td>
               <td class="muted">wrong rendezvous ID, and a scanner-less impostor</td>
               <td class="num ok">5/5</td>
-              <td class="num">4.4 s</td>
+              <td class="num">5.2 s</td>
             </tr>
             <tr>
               <td>Sync configuration</td>
               <td class="muted">the desktop config.json, projected for a phone</td>
               <td class="num ok">3/3</td>
-              <td class="num">458 ms</td>
+              <td class="num">388 ms</td>
             </tr>
             <tr>
               <td>Sync conversations</td>
               <td class="muted">index first, then full bodies on demand</td>
               <td class="num ok">2/2</td>
-              <td class="num">4.4 s</td>
+              <td class="num">1.7 s</td>
             </tr>
             <tr>
               <td>Run a live conversation</td>
               <td class="muted">mobile asks, desktop streams a real agent turn back</td>
               <td class="num ok">3/3</td>
-              <td class="num">760 ms</td>
+              <td class="num">696 ms</td>
             </tr>
             <tr>
               <td>Move files</td>
-              <td class="muted">real workspace files plus deliberately awkward ones</td>
-              <td class="num ok">10/10</td>
-              <td class="num">8.9 s</td>
+              <td class="muted">published sample files plus deliberately awkward ones</td>
+              <td class="num ok">12/12</td>
+              <td class="num">7.3 s</td>
             </tr>
             <tr>
               <td>Reverse direction — the phone serves the desktop</td>
               <td class="muted">device tools, a remote invocation, and an upload</td>
               <td class="num ok">6/6</td>
-              <td class="num">6.2 s</td>
+              <td class="num">2.2 s</td>
             </tr>
             <tr>
               <td>Move the 248 MB PDF, and survive a dropout</td>
               <td class="muted">the phone loses signal mid-transfer and resumes</td>
               <td class="num ok">4/4</td>
-              <td class="num">4m 3s</td>
+              <td class="num">4m 23s</td>
             </tr>
             <tr>
               <td>Verify delivery</td>
               <td class="muted">compare every artifact on both sides</td>
               <td class="num ok">2/2</td>
-              <td class="num">283 ms</td>
+              <td class="num">276 ms</td>
             </tr>
           </tbody>
         </table>
@@ -1523,58 +1523,74 @@
           </thead>
           <tbody>
             <tr>
-              <td><code>gosi-logo.png</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">9 B</td>
-              <td class="num">470 ms</td>
+              <td><code>wolffish-sample.png</code></td>
+              <td class="muted">samples/png</td>
+              <td class="num">35.7 KB</td>
+              <td class="num">547 ms</td>
+              <td class="num">0.06 MB/s (1 Mbps)</td>
+              <td class="ok">delivered</td>
+            </tr>
+            <tr>
+              <td><code>wolffish-sample.md</code></td>
+              <td class="muted">samples/md</td>
+              <td class="num">550 B</td>
+              <td class="num">518 ms</td>
               <td class="num">0.00 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
-              <td><code>wolffish-x-promotion-2026-06-24.md</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">12.7 KB</td>
-              <td class="num">556 ms</td>
-              <td class="num">0.02 MB/s (0 Mbps)</td>
-              <td class="ok">delivered</td>
-            </tr>
-            <tr>
-              <td><code>funnel-august-2026.chart.json</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">530 B</td>
-              <td class="num">494 ms</td>
+              <td><code>wolffish-sample.json</code></td>
+              <td class="muted">samples/json</td>
+              <td class="num">497 B</td>
+              <td class="num">465 ms</td>
               <td class="num">0.00 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
-              <td><code>younes-ai-daily.html</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">21.7 KB</td>
-              <td class="num">576 ms</td>
+              <td><code>wolffish-sample.html</code></td>
+              <td class="muted">samples/html</td>
+              <td class="num">773 B</td>
+              <td class="num">477 ms</td>
+              <td class="num">0.00 MB/s (0 Mbps)</td>
+              <td class="ok">delivered</td>
+            </tr>
+            <tr>
+              <td><code>wolffish-sample.pdf</code></td>
+              <td class="muted">samples/pdf</td>
+              <td class="num">56.8 KB</td>
+              <td class="num">514 ms</td>
+              <td class="num">0.11 MB/s (1 Mbps)</td>
+              <td class="ok">delivered</td>
+            </tr>
+            <tr>
+              <td><code>wolffish-sample.gif</code></td>
+              <td class="muted">samples/gif</td>
+              <td class="num">28.1 KB</td>
+              <td class="num">684 ms</td>
               <td class="num">0.04 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
-              <td><code>World Cup On Top.pdf</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">3.5 MB</td>
-              <td class="num">2.7 s</td>
-              <td class="num">1.27 MB/s (11 Mbps)</td>
+              <td><code>wolffish-sample.mp4</code></td>
+              <td class="muted">samples/mp4</td>
+              <td class="num">629.8 KB</td>
+              <td class="num">1.5 s</td>
+              <td class="num">0.42 MB/s (3 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
-              <td><code>demo4.gif</code></td>
-              <td class="muted">workspace/files</td>
-              <td class="num">3.3 MB</td>
-              <td class="num">2.6 s</td>
-              <td class="num">1.26 MB/s (11 Mbps)</td>
+              <td><code>wolffish-sample.docx</code></td>
+              <td class="muted">samples/docx</td>
+              <td class="num">4.3 KB</td>
+              <td class="num">705 ms</td>
+              <td class="num">0.01 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
               <td><code>empty-marker.txt</code></td>
               <td class="muted">generated (zero-byte edge case)</td>
               <td class="num">0 B</td>
-              <td class="num">238 ms</td>
+              <td class="num">229 ms</td>
               <td class="num">0.00 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
@@ -1582,7 +1598,7 @@
               <td><code>تقرير-المزامنة-٢٠٢٦.txt</code></td>
               <td class="muted">generated (RTL filename edge case)</td>
               <td class="num">140 B</td>
-              <td class="num">549 ms</td>
+              <td class="num">438 ms</td>
               <td class="num">0.00 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
@@ -1590,32 +1606,32 @@
               <td><code>chunk-boundary.bin</code></td>
               <td class="muted">generated (chunk-boundary edge case)</td>
               <td class="num">256.0 KB</td>
-              <td class="num">675 ms</td>
-              <td class="num">0.37 MB/s (3 Mbps)</td>
+              <td class="num">1.2 s</td>
+              <td class="num">0.21 MB/s (2 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
-              <td><code>camera-capture.png</code></td>
+              <td><code>camera-capture.jpg</code></td>
               <td class="muted">phone camera roll → desktop</td>
-              <td class="num">1.1 MB</td>
-              <td class="num">5.0 s</td>
-              <td class="num">0.21 MB/s (2 Mbps)</td>
+              <td class="num">59.2 KB</td>
+              <td class="num">955 ms</td>
+              <td class="num">0.06 MB/s (1 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
               <td><code>voice-memo.md</code></td>
               <td class="muted">phone recording → desktop</td>
               <td class="num">141 B</td>
-              <td class="num">499 ms</td>
+              <td class="num">551 ms</td>
               <td class="num">0.00 MB/s (0 Mbps)</td>
               <td class="ok">delivered</td>
             </tr>
             <tr>
               <td><code>miller.pdf</code></td>
-              <td class="muted">run cache</td>
+              <td class="muted">cdn.wolffi.sh/generic/miller.pdf</td>
               <td class="num">248.1 MB</td>
-              <td class="num">4m 3s</td>
-              <td class="num">1.02 MB/s (9 Mbps)</td>
+              <td class="num">4m 23s</td>
+              <td class="num">0.94 MB/s (8 Mbps)</td>
               <td class="ok">delivered · resumed</td>
             </tr>
           </tbody>
@@ -1634,14 +1650,14 @@
       </p>
       <div class="wrap">
         <pre>
-guest→relay         152 B  noise msg1     013d0642ca3ad03347c6eefaf7308b6130c213a2cb34adc5c9a3a0e589bb7b0544dad1a24a271a6321a8a18f0f342e07…
-host→relay          104 B  noise msg2     01c30d64ade36552b0ec2a9696c035572c9eb1a00fd8972b90fb6a6ce655ba545d9be20ae9f0afc10411433b93b6ea2e…
-guest→relay          62 B  RPC_REQ        023b91fe83a2331734361742f1fd543356409fab910616d6d3a03b7d1a7414ab27f2759bbb00915de15c8464528ba836…
-host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78f1b27ae051e5bd99984241826fe070333426798eab74546b4051e3e6fff0…</pre>
+guest→relay         152 B  noise msg1     011ef75ee1828c8305a40ea552bc90debaa73c4ec70c3e80c28a41f4811eed8f64cf347f0a979d71b9c36e5bfe6ab96f…
+host→relay          104 B  noise msg2     015dc9bc797d656790a9a383ffced901dc37bd5a387b752f5d235ffe9bcc86a81388b2d94ddc5a4fac972e91c6b7616a…
+guest→relay          62 B  RPC_REQ        029ccfb207550f165d9c936709bb72c53187ba31e713e1c3f2f68e760cdf2db2741b9347a09b3878a950648f8e8992c8…
+host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b5945163fbe7f83af294daf09220b440ea82708c63263981385202352ab88a79354…</pre>
       </div>
       <p>
-        Across 4 frames and 467 B, the captured ciphertext measures
-        <strong>7.586 bits per byte</strong> of entropy — 8.0 is indistinguishable from random
+        Across 4 frames and 456 B, the captured ciphertext measures
+        <strong>7.545 bits per byte</strong> of entropy — 8.0 is indistinguishable from random
         noise. No plaintext marker searched for appears anywhere in it, including the
         <code>%PDF</code> header of the file being transferred at the time.
       </p>
@@ -1660,21 +1676,27 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
           <tbody>
             <tr>
               <td class="ok">✓</td>
-              <td>real conversations available</td>
+              <td>demo manifest fetched from the CDN</td>
+              <td class="muted">version 025fc50bc5f8</td>
+              <td class="muted">Stage from the published demo dataset</td>
+            </tr>
+            <tr>
+              <td class="ok">✓</td>
+              <td>demo conversations loaded</td>
               <td class="muted">12</td>
-              <td class="muted">Stage the desktop replica</td>
+              <td class="muted">Stage from the published demo dataset</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>file spread staged</td>
-              <td class="muted">9 files</td>
-              <td class="muted">Stage the desktop replica</td>
+              <td class="muted">11 files</td>
+              <td class="muted">Stage from the published demo dataset</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>large PDF staged</td>
               <td class="muted">248.1 MB</td>
-              <td class="muted">Stage the desktop replica</td>
+              <td class="muted">Stage from the published demo dataset</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
@@ -1685,7 +1707,7 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>both sides derive the same rendezvous ID</td>
-              <td class="muted">9fe7e50dfa7c1e82…</td>
+              <td class="muted">2356b96373548bbd…</td>
               <td class="muted">Pair by QR code</td>
             </tr>
             <tr>
@@ -1703,7 +1725,7 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>both sides agree on the handshake transcript hash</td>
-              <td class="muted">8ca430943bfcb145aea3201e…</td>
+              <td class="muted">0e473307131a6564ec7af8a1…</td>
               <td class="muted">Connect and hand-shake</td>
             </tr>
             <tr>
@@ -1733,7 +1755,7 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>captured frames are high-entropy</td>
-              <td class="muted">7.586 bits/byte over 467 B</td>
+              <td class="muted">7.545 bits/byte over 456 B</td>
               <td class="muted">Prove the wire is opaque</td>
             </tr>
             <tr>
@@ -1793,7 +1815,7 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>every config section arrived</td>
-              <td class="muted">23 sections in 458 ms</td>
+              <td class="muted">12 sections in 388 ms</td>
               <td class="muted">Sync configuration</td>
             </tr>
             <tr>
@@ -1804,8 +1826,8 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>real settings survived the trip</td>
-              <td class="muted"></td>
+              <td>demo settings survived the trip</td>
+              <td class="muted">33 capabilities · 11 services</td>
               <td class="muted">Sync configuration</td>
             </tr>
             <tr>
@@ -1823,13 +1845,13 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>agent streamed deltas to the phone</td>
-              <td class="muted">9 events</td>
+              <td class="muted">7 events</td>
               <td class="muted">Run a live conversation</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>streamed transcript reassembled exactly</td>
-              <td class="muted">2400 chars</td>
+              <td class="muted">1812 chars</td>
               <td class="muted">Run a live conversation</td>
             </tr>
             <tr>
@@ -1840,62 +1862,74 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered gosi-logo.png</td>
-              <td class="muted">9 B · 470 ms · 0.00 MB/s (0 Mbps)</td>
+              <td>delivered wolffish-sample.png</td>
+              <td class="muted">35.7 KB · 547 ms · 0.06 MB/s (1 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered wolffish-x-promotion-2026-06-24.md</td>
-              <td class="muted">12.7 KB · 556 ms · 0.02 MB/s (0 Mbps)</td>
+              <td>delivered wolffish-sample.md</td>
+              <td class="muted">550 B · 518 ms · 0.00 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered funnel-august-2026.chart.json</td>
-              <td class="muted">530 B · 494 ms · 0.00 MB/s (0 Mbps)</td>
+              <td>delivered wolffish-sample.json</td>
+              <td class="muted">497 B · 465 ms · 0.00 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered younes-ai-daily.html</td>
-              <td class="muted">21.7 KB · 576 ms · 0.04 MB/s (0 Mbps)</td>
+              <td>delivered wolffish-sample.html</td>
+              <td class="muted">773 B · 477 ms · 0.00 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered World Cup On Top.pdf</td>
-              <td class="muted">3.5 MB · 2.7 s · 1.27 MB/s (11 Mbps)</td>
+              <td>delivered wolffish-sample.pdf</td>
+              <td class="muted">56.8 KB · 514 ms · 0.11 MB/s (1 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>delivered demo4.gif</td>
-              <td class="muted">3.3 MB · 2.6 s · 1.26 MB/s (11 Mbps)</td>
+              <td>delivered wolffish-sample.gif</td>
+              <td class="muted">28.1 KB · 684 ms · 0.04 MB/s (0 Mbps)</td>
+              <td class="muted">Move files</td>
+            </tr>
+            <tr>
+              <td class="ok">✓</td>
+              <td>delivered wolffish-sample.mp4</td>
+              <td class="muted">629.8 KB · 1.5 s · 0.42 MB/s (3 Mbps)</td>
+              <td class="muted">Move files</td>
+            </tr>
+            <tr>
+              <td class="ok">✓</td>
+              <td>delivered wolffish-sample.docx</td>
+              <td class="muted">4.3 KB · 705 ms · 0.01 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>delivered empty-marker.txt</td>
-              <td class="muted">0 B · 238 ms · 0.00 MB/s (0 Mbps)</td>
+              <td class="muted">0 B · 229 ms · 0.00 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>delivered تقرير-المزامنة-٢٠٢٦.txt</td>
-              <td class="muted">140 B · 549 ms · 0.00 MB/s (0 Mbps)</td>
+              <td class="muted">140 B · 438 ms · 0.00 MB/s (0 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>delivered chunk-boundary.bin</td>
-              <td class="muted">256.0 KB · 675 ms · 0.37 MB/s (3 Mbps)</td>
+              <td class="muted">256.0 KB · 1.2 s · 0.21 MB/s (2 Mbps)</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>every file completed on the mobile side</td>
-              <td class="muted">9/9</td>
+              <td class="muted">11/11</td>
               <td class="muted">Move files</td>
             </tr>
             <tr>
@@ -1918,14 +1952,14 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             </tr>
             <tr>
               <td class="ok">✓</td>
-              <td>phone uploaded camera-capture.png</td>
-              <td class="muted">1.1 MB · 5.0 s</td>
+              <td>phone uploaded camera-capture.jpg</td>
+              <td class="muted">59.2 KB · 955 ms</td>
               <td class="muted">Reverse direction — the phone serves the desktop</td>
             </tr>
             <tr>
               <td class="ok">✓</td>
               <td>phone uploaded voice-memo.md</td>
-              <td class="muted">141 B · 499 ms</td>
+              <td class="muted">141 B · 551 ms</td>
               <td class="muted">Reverse direction — the phone serves the desktop</td>
             </tr>
             <tr>
@@ -1961,7 +1995,7 @@ host→relay          149 B  RPC_RES        026f6e086e5fca118b30ced14f1b6d372c78
             <tr>
               <td class="ok">✓</td>
               <td>every desktop file is byte-identical on the phone</td>
-              <td class="muted">10/10</td>
+              <td class="muted">12/12</td>
               <td class="muted">Verify delivery</td>
             </tr>
             <tr>

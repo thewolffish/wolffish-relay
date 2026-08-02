@@ -29,27 +29,20 @@ export const rendezvousId = (psk) => hex(hmac(sha256, psk, new TextEncoder().enc
 
 export const phases = [
   {
-    title: 'Stage the desktop replica',
-    detail: 'real config, conversations and files from ~/.wolffish',
+    title: 'Stage from the published demo dataset',
+    detail: 'manifest, conversations, config and files — all from the CDN',
     async run(ctx) {
       const { log, dirs } = ctx
-      const { desktopConfig, snapshot } = await fixtures.loadConfigs()
-      log.desktop(
-        `loaded config.json — ${Object.keys(desktopConfig).length} sections, ` +
-          `${bytes(JSON.stringify(desktopConfig).length)}`
-      )
 
-      const conversations = await fixtures.loadConversations(12)
-      log.desktop(
-        `loaded ${conversations.length} newest conversations ` +
-          `(${conversations.reduce((n, c) => n + c.conversation.messages.length, 0)} messages)`
-      )
+      const manifest = await fixtures.loadDemoManifest(dirs.cache, log)
+      const desktopConfig = await fixtures.loadDemoConfig(manifest, dirs.cache, log)
+      const conversations = await fixtures.loadDemoConversations(manifest, dirs.cache, 12, log)
+      const files = await fixtures.selectSampleFiles(dirs.desktopFiles, dirs.cache, log)
+      const mobileUploads = await fixtures.selectMobileUploads(dirs.mobileOutbox, dirs.cache, log)
 
-      const files = await fixtures.selectFiles(dirs.desktopFiles, log)
-      const mobileUploads = await fixtures.selectMobileUploads(dirs.mobileOutbox, log)
       ctx.fixtures = {
+        manifest,
         desktopConfig,
-        snapshot,
         conversations,
         indexRows: fixtures.toIndexRows(conversations),
         files,
@@ -57,16 +50,20 @@ export const phases = [
       }
 
       if (!ctx.options.quick) {
-        const big = await fixtures.stageBigPdf({
+        ctx.fixtures.bigFile = await fixtures.stageBigPdf({
           cacheDir: dirs.cache,
           desktopDir: dirs.desktopFiles,
           log
         })
-        ctx.fixtures.bigFile = big
       }
 
-      log.check(conversations.length > 0, 'real conversations available', `${conversations.length}`)
-      log.check(files.length >= 6, 'file spread staged', `${files.length} files`)
+      log.check(
+        manifest.conversations > 0 && manifest.shards.length > 0,
+        'demo manifest fetched from the CDN',
+        `version ${manifest.version}`
+      )
+      log.check(conversations.length === 12, 'demo conversations loaded', `${conversations.length}`)
+      log.check(files.length >= 8, 'file spread staged', `${files.length} files`)
       log.check(
         Boolean(ctx.fixtures.bigFile) || ctx.options.quick,
         'large PDF staged',
@@ -421,8 +418,11 @@ export const phases = [
         'credentials were replaced before leaving the desktop'
       )
       log.check(
-        config.llm !== undefined && config.locale !== undefined,
-        'real settings survived the trip'
+        config.llm !== undefined &&
+          config.capabilities !== undefined &&
+          config.preferences !== undefined,
+        'demo settings survived the trip',
+        `${config.capabilities?.length ?? 0} capabilities · ${Object.keys(config.services ?? {}).length} services`
       )
       ctx.results.config = { sections: mobileSections.length, ms, size: written.size }
     }
@@ -512,7 +512,7 @@ export const phases = [
 
   {
     title: 'Move files',
-    detail: 'real workspace files plus deliberately awkward ones',
+    detail: 'published sample files plus deliberately awkward ones',
     async run(ctx) {
       const { log } = ctx
       const completions = []
@@ -585,12 +585,11 @@ export const phases = [
 
       for (const file of uploads) {
         const started = Date.now()
-        const sent =
-          file.name === 'camera-capture.png'
-            ? await ctx.desktop.rpc('camera.capture', { name: file.name }) // desktop asks; phone pushes
-            : await ctx.mobile.sendFile(path.join(ctx.dirs.mobileOutbox, file.name), {
-                name: file.name
-              })
+        const sent = file.name.startsWith('camera-capture')
+          ? await ctx.desktop.rpc('camera.capture', { name: file.name }) // desktop asks; phone pushes
+          : await ctx.mobile.sendFile(path.join(ctx.dirs.mobileOutbox, file.name), {
+              name: file.name
+            })
         const ms = Math.max(1, Date.now() - started)
         const record = {
           name: file.name,

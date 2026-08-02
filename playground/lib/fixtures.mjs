@@ -1,31 +1,27 @@
 /**
- * Real Wolffish data for the run — nothing synthetic.
+ * Everything a run moves comes from the published demo dataset — the same
+ * bytes the mobile app downloads in demo mode. Nothing is read from a local
+ * workspace, so the run is identical on any machine that clones this repo and
+ * carries no personal data.
  *
- * Sources, in the order the product itself would use them:
- *   ~/.wolffish/workspace          the live desktop runtime: config, conversations, files
- *   wolffish-mobile/demo-data      the curated demo set the app ships against
- *   cdn.wolffi.sh                  large assets fetched on demand (miller.pdf)
+ *   cdn.wolffi.sh/demo      manifest.json → conversation shards + config snapshot
+ *   cdn.wolffi.sh/samples   one file per type the desktop recognises (109 of them)
+ *   cdn.wolffi.sh/generic   large assets — miller.pdf
  *
- * Everything selected here is copied into the run's gitignored desktop replica
- * first, so the transfer moves real bytes out of a real folder.
+ * Downloads are cached in `playground/out/.cache/`, so the first run fetches and
+ * later runs are offline-fast. The staged copies still land in the run's
+ * desktop and phone folders, so transfers move real bytes out of real folders.
  */
 import { createWriteStream } from 'node:fs'
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { bytes } from './log.mjs'
 
-export const WORKSPACE = path.join(os.homedir(), '.wolffish', 'workspace')
-export const MOBILE_DEMO = path.join(
-  os.homedir(),
-  'Documents',
-  'wolffish',
-  'wolffish-mobile',
-  'demo-data'
-)
+export const DEMO_BASE_URL = process.env.DEMO_BASE_URL ?? 'https://cdn.wolffi.sh/demo'
+export const SAMPLES_BASE_URL = process.env.SAMPLES_BASE_URL ?? 'https://cdn.wolffi.sh/samples'
+export const SAMPLE_STEM = 'wolffish-sample'
 export const BIG_PDF_URL = 'https://cdn.wolffi.sh/generic/miller.pdf'
-export const BIG_PDF_LOCAL = path.join(os.homedir(), 'Documents', 'miller.pdf')
 
 const exists = async (p) => {
   try {
@@ -36,41 +32,88 @@ const exists = async (p) => {
   }
 }
 
-/** The desktop's real config.json, plus the mobile-shaped snapshot. */
-export async function loadConfigs() {
-  const desktopConfig = JSON.parse(await fs.readFile(path.join(WORKSPACE, 'config.json'), 'utf8'))
-  let snapshot = null
-  const snapshotPath = path.join(MOBILE_DEMO, 'config-snapshot.json')
-  if (await exists(snapshotPath)) snapshot = JSON.parse(await fs.readFile(snapshotPath, 'utf8'))
-  return { desktopConfig, snapshot }
+/** Fetch-and-cache by URL; returns the cached path. */
+async function cached(url, cacheDir, name, log) {
+  await fs.mkdir(cacheDir, { recursive: true })
+  const file = path.join(cacheDir, name)
+  if (await exists(file)) return { file, fromCache: true }
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`${url} → HTTP ${response.status}`)
+  await pipeline(response.body, createWriteStream(file))
+  const { size } = await fs.stat(file)
+  log?.desktop(`fetched ${url.replace(/^https:\/\//, '')} (${bytes(size)})`)
+  return { file, fromCache: false }
+}
+
+async function cachedJson(url, cacheDir, name, log) {
+  const { file } = await cached(url, cacheDir, name, log)
+  return JSON.parse(await fs.readFile(file, 'utf8'))
+}
+
+/** The published dataset's manifest — the index everything else follows. */
+export async function loadDemoManifest(cacheDir, log) {
+  // Always revalidated: the manifest is what tells us whether the cache is stale.
+  const response = await fetch(`${DEMO_BASE_URL}/manifest.json`)
+  if (!response.ok) throw new Error(`demo manifest → HTTP ${response.status}`)
+  const manifest = await response.json()
+  await fs.mkdir(cacheDir, { recursive: true })
+  await fs.writeFile(path.join(cacheDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+  log?.desktop(
+    `demo manifest ${manifest.version} — ${manifest.conversations} conversations, ` +
+      `${manifest.shards.length} shards, ${bytes(manifest.totalBytes)} total`
+  )
+  return manifest
+}
+
+/** The demo config snapshot: what a phone's settings screen renders. */
+export async function loadDemoConfig(manifest, cacheDir, log) {
+  const name = `${manifest.version}-${manifest.config.file}`
+  const config = await cachedJson(
+    `${DEMO_BASE_URL}/${manifest.config.file}?v=${encodeURIComponent(manifest.version)}`,
+    cacheDir,
+    name,
+    log
+  )
+  log?.desktop(
+    `demo config — ${Object.keys(config).length} sections, ${bytes(manifest.config.bytes)}`
+  )
+  return config
 }
 
 /**
- * Newest real conversations from the desktop brain. Returns the index rows the
- * desktop would advertise plus the full payloads it serves on request.
+ * Conversations from the published shards. Shards are pulled newest-first until
+ * the requested count is met, so a run costs one or two shards rather than the
+ * whole 18 MB dataset.
  */
-export async function loadConversations(limit = 12) {
-  const dir = path.join(WORKSPACE, 'brain', 'conversations')
-  const names = await fs.readdir(dir)
-  const withTimes = await Promise.all(
-    names
-      .filter((n) => n.endsWith('.json'))
-      .map(async (n) => ({ n, mtime: (await fs.stat(path.join(dir, n))).mtimeMs }))
-  )
-  withTimes.sort((a, b) => b.mtime - a.mtime)
-
-  const conversations = []
-  for (const { n } of withTimes.slice(0, limit)) {
-    try {
-      const raw = await fs.readFile(path.join(dir, n), 'utf8')
-      const conversation = JSON.parse(raw)
-      if (!conversation.id || !Array.isArray(conversation.messages)) continue
-      conversations.push({ file: n, bytes: raw.length, conversation })
-    } catch {
-      /* skip anything unreadable — the run should not depend on one bad file */
+export async function loadDemoConversations(manifest, cacheDir, limit, log) {
+  const collected = []
+  // Later shards hold the smaller, more numerous conversations; start there so
+  // one download covers a whole run.
+  for (const shard of [...manifest.shards].reverse()) {
+    const name = `${manifest.version}-${shard.file}`
+    const payload = await cachedJson(
+      `${DEMO_BASE_URL}/${shard.file}?v=${encodeURIComponent(manifest.version)}`,
+      cacheDir,
+      name,
+      log
+    )
+    for (const conversation of payload.conversations ?? []) {
+      if (!conversation?.id || !Array.isArray(conversation.messages)) continue
+      collected.push({
+        file: `${shard.file}#${conversation.id}`,
+        bytes: JSON.stringify(conversation).length,
+        conversation
+      })
+      if (collected.length >= limit) break
     }
+    if (collected.length >= limit) break
   }
-  return conversations
+  collected.sort((a, b) => (b.conversation.updatedAt ?? 0) - (a.conversation.updatedAt ?? 0))
+  log?.desktop(
+    `loaded ${collected.length} demo conversations ` +
+      `(${collected.reduce((n, c) => n + c.conversation.messages.length, 0)} messages)`
+  )
+  return collected
 }
 
 /** Index rows: what a "sync the conversation list" call actually returns. */
@@ -82,51 +125,30 @@ export function toIndexRows(conversations) {
     messages: conversation.messages.length,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
-    icon: conversation.icon ?? null,
+    channel: conversation.channel ?? null,
     bytes: size
   }))
 }
 
 /**
- * A deliberately awkward spread of real files: tiny, text, image, animation,
- * document — plus generated edge cases (empty file, Arabic filename) that the
- * product will meet in the wild.
+ * A deliberately awkward spread of published sample files — one per type, the
+ * same bytes the demo serves for every `.pdf`, `.png`, `.gif` a conversation
+ * references — plus generated edge cases the product will meet in the wild.
  */
-export async function selectFiles(desktopDir, log) {
-  const filesDir = path.join(WORKSPACE, 'files')
+export async function selectSampleFiles(desktopDir, cacheDir, log) {
+  const wanted = ['png', 'md', 'json', 'html', 'pdf', 'gif', 'mp4', 'docx']
   const chosen = []
 
-  const all = await fs.readdir(filesDir)
-  const stats = await Promise.all(
-    all.map(async (name) => {
-      try {
-        const s = await fs.stat(path.join(filesDir, name))
-        return s.isFile() ? { name, size: s.size } : null
-      } catch {
-        return null
-      }
-    })
-  )
-  const usable = stats.filter(Boolean).filter((f) => !f.name.startsWith('.'))
-  const byExt = (ext, { min = 0, max = Infinity } = {}) =>
-    usable
-      .filter((f) => f.name.toLowerCase().endsWith(ext) && f.size >= min && f.size <= max)
-      .sort((a, b) => a.size - b.size)
-
-  const picks = [
-    byExt('.png', { min: 1 })[0], // smallest real png — often a 9-byte stub
-    byExt('.md')[0],
-    byExt('.json')[0],
-    byExt('.html', { min: 20_000 })[0],
-    byExt('.pdf', { min: 500_000, max: 4_000_000 }).at(-1), // a chunky real PDF
-    byExt('.gif', { min: 2_000_000, max: 12_000_000 })[0] // multi-chunk binary
-  ].filter(Boolean)
-
-  for (const pick of picks) {
-    const from = path.join(filesDir, pick.name)
-    const to = path.join(desktopDir, pick.name)
-    await fs.copyFile(from, to)
-    chosen.push({ name: pick.name, size: pick.size, source: 'workspace/files' })
+  for (const ext of wanted) {
+    const fileName = `${SAMPLE_STEM}.${ext}`
+    try {
+      const { file } = await cached(`${SAMPLES_BASE_URL}/${fileName}`, cacheDir, fileName, log)
+      const { size } = await fs.stat(file)
+      await fs.copyFile(file, path.join(desktopDir, fileName))
+      chosen.push({ name: fileName, size, source: `samples/${ext}` })
+    } catch (error) {
+      log?.desktop(`sample .${ext} unavailable — skipping (${error.message})`)
+    }
   }
 
   // Edge cases the real world will produce sooner or later.
@@ -143,7 +165,7 @@ export async function selectFiles(desktopDir, log) {
     source: 'generated (RTL filename edge case)'
   })
 
-  // Exactly one chunk + 1 byte: exercises the boundary between windowed frames.
+  // Exactly one chunk + 1 byte: exercises the windowed-frame boundary.
   const boundaryName = 'chunk-boundary.bin'
   const boundary = Buffer.alloc(256 * 1024 + 1, 0xab)
   await fs.writeFile(path.join(desktopDir, boundaryName), boundary)
@@ -161,31 +183,26 @@ export async function selectFiles(desktopDir, log) {
 }
 
 /**
- * Files the phone holds and the desktop does not — what a camera roll or a
- * voice memo folder stands in for. These travel mobile → desktop.
+ * Files the phone holds and the desktop does not — a camera capture and a voice
+ * memo, standing in for everything only a device can produce.
  */
-export async function selectMobileUploads(outboxDir, log) {
+export async function selectMobileUploads(outboxDir, cacheDir, log) {
   await fs.mkdir(outboxDir, { recursive: true })
-  const filesDir = path.join(WORKSPACE, 'files')
   const staged = []
 
-  const all = await fs.readdir(filesDir)
-  const images = []
-  for (const name of all) {
-    if (!/\.(png|jpe?g)$/i.test(name)) continue
-    try {
-      const { size } = await fs.stat(path.join(filesDir, name))
-      if (size > 20_000 && size < 3_000_000) images.push({ name, size })
-    } catch {
-      /* skip */
-    }
-  }
-  images.sort((a, b) => b.size - a.size)
-
-  if (images[0]) {
-    const uploadName = 'camera-capture.png'
-    await fs.copyFile(path.join(filesDir, images[0].name), path.join(outboxDir, uploadName))
-    staged.push({ name: uploadName, size: images[0].size, source: 'phone camera roll' })
+  const captureName = 'camera-capture.jpg'
+  try {
+    const { file } = await cached(
+      `${SAMPLES_BASE_URL}/${SAMPLE_STEM}.jpg`,
+      cacheDir,
+      `${SAMPLE_STEM}.jpg`,
+      log
+    )
+    const { size } = await fs.stat(file)
+    await fs.copyFile(file, path.join(outboxDir, captureName))
+    staged.push({ name: captureName, size, source: 'phone camera roll' })
+  } catch (error) {
+    log?.mobile(`camera sample unavailable — ${error.message}`)
   }
 
   const memo = `# Voice memo — transcribed on device\n\nCaptured on the phone, never on the desktop.\nUploaded through the tunnel so the agent can act on it.\n`
@@ -198,36 +215,17 @@ export async function selectMobileUploads(outboxDir, log) {
   return staged
 }
 
-/**
- * Puts miller.pdf in the desktop replica. Prefers a cached copy, then the local
- * Documents copy, and downloads from the CDN when neither exists — the download
- * path is what a fresh clone of this repo will take.
- */
+/** Puts miller.pdf in the desktop replica, cached after the first download. */
 export async function stageBigPdf({ cacheDir, desktopDir, log }) {
-  await fs.mkdir(cacheDir, { recursive: true })
-  const cached = path.join(cacheDir, 'miller.pdf')
+  const { file, fromCache } = await cached(BIG_PDF_URL, cacheDir, 'miller.pdf', log)
   const destination = path.join(desktopDir, 'miller.pdf')
-  let origin
-
-  if (await exists(cached)) {
-    origin = 'run cache'
-  } else if (await exists(BIG_PDF_LOCAL)) {
-    log?.desktop('seeding miller.pdf from ~/Documents (skips a 248 MB download)')
-    await fs.copyFile(BIG_PDF_LOCAL, cached)
-    origin = '~/Documents/miller.pdf'
-  } else {
-    log?.desktop(`downloading ${BIG_PDF_URL} …`)
-    const started = Date.now()
-    const response = await fetch(BIG_PDF_URL)
-    if (!response.ok) throw new Error(`download failed: HTTP ${response.status}`)
-    await pipeline(response.body, createWriteStream(cached))
-    const size = (await fs.stat(cached)).size
-    log?.desktop(`downloaded ${bytes(size)} in ${((Date.now() - started) / 1000).toFixed(1)}s`)
-    origin = BIG_PDF_URL
-  }
-
-  await fs.copyFile(cached, destination)
+  await fs.copyFile(file, destination)
   const { size } = await fs.stat(destination)
-  log?.desktop(`staged miller.pdf (${bytes(size)}) from ${origin}`)
-  return { name: 'miller.pdf', size, source: origin, path: destination }
+  log?.desktop(`staged miller.pdf (${bytes(size)})${fromCache ? ' from the run cache' : ''}`)
+  return {
+    name: 'miller.pdf',
+    size,
+    source: BIG_PDF_URL.replace(/^https:\/\//, ''),
+    path: destination
+  }
 }

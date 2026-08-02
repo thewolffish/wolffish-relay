@@ -7,3 +7,8 @@ dist
 .claude
 *.tsbuildinfo
 .dev.vars
+
+# Playground run output: caches a 248 MB PDF and the delivered files.
+# Belt-and-braces — playground/out/.gitignore covers this too, but that file
+# gets deleted whenever a run clears the directory.
+playground/out/
