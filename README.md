@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.10-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.11-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [report.html](report.html) in this repo.
@@ -238,11 +238,11 @@ Unpairing means deleting the stored key material on each device. There is nothin
 | Windows  | DPAPI, via Electron `safeStorage`                               | Other **users** on the machine — _not_ other apps running as you |
 | Linux    | `gnome-libsecret` / `kwallet`, via Electron `safeStorage`       | Other users, **only when a secret store is present**             |
 
-**The Linux caveat is real and worth stating plainly.** From Electron's own documentation: if no secret store is available, items "will be unprotected as they are encrypted via hardcoded plaintext password". That is obfuscation, not encryption, and it applies to headless boxes and minimal window managers — exactly the setups a local-first desktop agent attracts.
+**The approach is deliberately boring: use each platform's default.** `safeStorage` on desktop and `expo-secure-store` on mobile are built in, need no native modules, and behave the same on every install — no passphrase prompts, no custom key derivation, nothing that can fail for a subset of users.
 
-Clients should call `safeStorage.isEncryptionAvailable()` and, on Linux, `safeStorage.getSelectedStorageBackend()`. A result of `basic_text` means the keys sit at rest effectively in the clear, and the user deserves to be told.
+One documented gap comes with that choice. On Linux, if no secret store is available, Electron's docs say items "will be unprotected as they are encrypted via hardcoded plaintext password" — obfuscation rather than encryption, on headless boxes and minimal window managers.
 
-Why this matters more than it first appears: anyone who can read the user's home directory can already read that app's local data. But the _keys_ buy something extra — the ability to impersonate that device to its peer and pull data from the other end of the tunnel. On a Linux box with no keyring, that reach is the exposure.
+That is accepted rather than engineered around. A device whose home directory an attacker can already read has bigger problems than these keys, and the alternatives all trade a rare edge case for complexity that would fail for ordinary users. `safeStorage.getSelectedStorageBackend()` returns the active backend in one call, so the connection-details screen can simply show it.
 
 ## No logs, no telemetry
 
