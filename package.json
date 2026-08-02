@@ -23,7 +23,8 @@
     "release": "npm version patch && git push origin main --tags",
     "playground": "node playground/run.mjs",
     "playground:quick": "node playground/run.mjs --quick",
-    "playground:local": "node playground/run.mjs --relay ws://localhost:8787"
+    "playground:local": "node playground/run.mjs --relay ws://localhost:8787",
+    "report": "node playground/render-report.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.1",

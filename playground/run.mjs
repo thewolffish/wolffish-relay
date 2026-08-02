@@ -85,7 +85,7 @@ async function main() {
   ctx.desktop?.close(1000, 'run complete')
   ctx.mobile?.close(1000, 'run complete')
 
-  const reportPath = await writeReport({ log, ctx, outDir })
+  const reportPath = await writeReport({ log, ctx, outDir, repoRoot: path.join(here, '..') })
 
   const line = '─'.repeat(64)
   console.log(`\n${line}`)

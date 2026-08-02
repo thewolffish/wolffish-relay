@@ -33,7 +33,9 @@ npm run playground:local    # drive `npm run dev` instead of production
 
 ## What a run leaves behind
 
-Everything lands in `playground/out/` (gitignored):
+**[`../report.html`](../report.html)** — the committed reference document, regenerated with this run's real figures. It is the relay's public explainer: architecture, security model, retention guarantees, the example run, and the self-hosting guide. Edit its prose in `lib/report.mjs`, then `npm run report` to re-render without re-running the cycle.
+
+Everything else lands in `playground/out/` (gitignored):
 
 ```
 out/
@@ -46,14 +48,14 @@ out/
 │   ├── conversations/  full bodies, byte-identical to the desktop's
 │   ├── config.json
 │   └── live-turn.md    the streamed agent reply, reassembled
-├── report.html         the visual report: speeds, ciphertext, verification
-├── run.json            machine-readable results
+├── run.json            machine-readable results (feeds report.html)
 └── run.log             the full timeline
 ```
 
-Open `out/report.html` to see the run rather than read it — including the
-desktop → relay → phone journey of the big PDF with its throughput, the
-hexdump of what the relay actually carried, and the sha256 comparison table.
+Open [`../report.html`](../report.html) to see the run rather than read it —
+including the desktop → relay → phone journey of the big PDF with its
+throughput, the hexdump of what the relay actually carried, and the sha256
+comparison table.
 
 ## Extending it
 
@@ -80,15 +82,17 @@ New RPC methods or events go in `lib/devices.mjs`; new fixtures in
 
 ## How it is put together
 
-| File               | Role                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `run.mjs`          | Entry point: prepares folders, runs phases, writes the report                                                                  |
-| `scenario.mjs`     | The ordered cycle — the part you extend                                                                                        |
-| `lib/noise.mjs`    | Noise IKpsk2 (`Noise_IKpsk2_25519_ChaChaPoly_SHA256`) via `@noble`, pure JS so the same code runs on Node, Electron and Hermes |
-| `lib/tunnel.mjs`   | A tunnel endpoint: frames, RPC, events, the resumable file engine, and the wiretap                                             |
-| `lib/devices.mjs`  | How each side behaves — desktop serves, mobile receives                                                                        |
-| `lib/fixtures.mjs` | Real data selection from `~/.wolffish`, the mobile demo set, and the CDN                                                       |
-| `lib/report.mjs`   | The HTML/JSON/log output                                                                                                       |
+| File                | Role                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `run.mjs`           | Entry point: prepares folders, runs phases, writes the report                                                                  |
+| `scenario.mjs`      | The ordered cycle — the part you extend                                                                                        |
+| `lib/noise.mjs`     | Noise IKpsk2 (`Noise_IKpsk2_25519_ChaChaPoly_SHA256`) via `@noble`, pure JS so the same code runs on Node, Electron and Hermes |
+| `lib/tunnel.mjs`    | A tunnel endpoint: frames, RPC, events, the resumable file engine, and the wiretap                                             |
+| `lib/devices.mjs`   | How each side behaves — desktop serves, mobile receives                                                                        |
+| `lib/fixtures.mjs`  | Real data selection from `~/.wolffish`, the mobile demo set, and the CDN                                                       |
+| `lib/report.mjs`    | The reference document (`report.html`) plus the JSON and log output                                                            |
+| `lib/diagrams.mjs`  | Inline SVG illustrations used by the document                                                                                  |
+| `render-report.mjs` | `npm run report` — re-render the document from the last run                                                                    |
 
 ## Notes
 
