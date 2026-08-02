@@ -1,0 +1,31 @@
+/**
+ * wolffish-relay — Cloudflare configuration.
+ *
+ * ZDR invariants encoded here (keep them forever):
+ * - observability disabled: no Workers Logs, no traces
+ * - no storage bindings of any kind: no KV, no D1, no R2, no queues, no
+ *   analytics engine — the only binding is the in-memory Tunnel DO
+ * - no workers.dev or preview hostnames: relay.wolffi.sh is the only front door
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wolffish-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+
+  "observability": {
+    "enabled": false
+  },
+
+  "routes": [{ "pattern": "relay.wolffi.sh", "custom_domain": true }],
+
+  "durable_objects": {
+    "bindings": [{ "name": "TUNNEL", "class_name": "Tunnel" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Tunnel"] }]
+}

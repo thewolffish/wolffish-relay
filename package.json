@@ -1,0 +1,40 @@
+{
+  "name": "wolffish-relay",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Zero-retention WebSocket relay for the Wolffish tunnel — a Cloudflare Worker + Durable Object that pairs desktop and mobile by rendezvous ID and forwards end-to-end-encrypted frames verbatim. Stores nothing, logs nothing, sees only ciphertext.",
+  "author": "Younes Alturkey <younes@wolffi.sh>",
+  "homepage": "https://wolffi.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thewolffish/wolffish-relay.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint --cache .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "release": "npm version patch && git push origin main --tags"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.20.1",
+    "@cloudflare/workers-types": "^5.20260801.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.118.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260730.1": true
+  }
+}

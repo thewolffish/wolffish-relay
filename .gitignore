@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+.DS_Store
+.eslintcache
+*.log*
+.claude
+*.tsbuildinfo
+.dev.vars
