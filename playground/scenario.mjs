@@ -223,9 +223,14 @@ export const phases = [
     async run(ctx) {
       const { log } = ctx
 
-      // A round trip so there is real traffic to inspect.
+      // A round trip so there is real traffic to inspect — then enough more to
+      // make the entropy figure mean something. A few hundred bytes of
+      // handshake is too small a sample: even perfectly random data averages
+      // only ~7.6 bits/byte at that size, purely from counting noise.
       const health = await ctx.mobile.rpc('system.check')
       log.check(health.ok === true, 'RPC round-trip over the encrypted tunnel')
+      const { rows } = await ctx.mobile.rpc('conversations.list')
+      for (const row of rows.slice(0, 3)) await ctx.mobile.rpc('conversation.get', { id: row.id })
 
       const samples = ctx.wiretap.samples
       log.wire(
@@ -253,10 +258,15 @@ export const phases = [
       // 2. Ciphertext looks like noise, not like structured data. Measured over
       // the whole sampled corpus so the figure is statistically meaningful.
       const entropy = ctx.wiretap.entropy()
+      const sampled = ctx.wiretap.histogramBytes
+      // Shannon entropy is biased low on small samples by about
+      // (256-1)/(2·n·ln2) bits, so compare against what truly random bytes
+      // would score at this sample size rather than against a flat 8.0.
+      const ceiling = 8 - 255 / (2 * sampled * Math.LN2)
       log.check(
-        entropy > 7.5,
-        'captured frames are high-entropy',
-        `${entropy.toFixed(3)} bits/byte over ${bytes(ctx.wiretap.histogramBytes)}`
+        sampled > 4096 && entropy > ceiling - 0.05,
+        'captured frames are indistinguishable from random',
+        `${entropy.toFixed(3)} bits/byte over ${bytes(sampled)} (random would score ${ceiling.toFixed(3)})`
       )
 
       // 3. AEAD integrity: a flipped bit must be rejected, not silently accepted.

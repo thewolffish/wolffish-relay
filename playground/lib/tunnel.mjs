@@ -220,6 +220,13 @@ export class Tunnel {
     this.fileDoneRejects?.clear()
     this.fileWaiters.clear()
     for (const state of this.sending?.values() ?? []) state.onCredit?.()
+
+    // An interrupted receive is abandoned mid-file while still holding an open
+    // file handle. Close it explicitly — leaving it to the garbage collector is
+    // deprecated in Node, and the resumed transfer reopens from the on-disk
+    // checkpoint rather than from anything held here.
+    for (const state of this.receiving.values()) state.handle.close().catch(() => {})
+    this.receiving.clear()
   }
 
   /** Forget the session keys so a returning peer can hand-shake afresh over the

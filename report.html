@@ -420,15 +420,15 @@
 <p>What remains, honestly: the platform's own aggregate request counters, and TLS terminating at the edge — as it does for any hosted service. Neither exposes content, because what crosses the edge is already ciphertext sealed on your devices. If that residual matters to you, the design's answer is the last section: run the relay yourself.</p>
 
 <h2 id="run">Example run</h2>
-<p class="muted">Generated 2026-08-02T22:37:35.556Z · a real cycle against <code>wss://relay.wolffi.sh</code>, not a simulation. Reproduce it with <code>npm run playground</code>.</p>
+<p class="muted">Generated 2026-08-02T23:43:28.081Z · a real cycle against <code>wss://relay.wolffi.sh</code>, not a simulation. Reproduce it with <code>npm run playground</code>.</p>
 
 <div class="cards">
   <div class="card"><div class="k">Checks</div><div class="v ok">55/55</div></div>
   <div class="card"><div class="k">Files delivered</div><div class="v">12</div></div>
   <div class="card"><div class="k">Payload moved</div><div class="v">249.1 MB</div></div>
-  <div class="card"><div class="k">Sealed frames</div><div class="v">1,205</div></div>
-  <div class="card"><div class="k">Handshake</div><div class="v">411 ms</div></div>
-  <div class="card"><div class="k">Wall clock</div><div class="v">5m 12s</div></div>
+  <div class="card"><div class="k">Sealed frames</div><div class="v">1,213</div></div>
+  <div class="card"><div class="k">Handshake</div><div class="v">246 ms</div></div>
+  <div class="card"><div class="k">Wall clock</div><div class="v">3m 0s</div></div>
 </div>
 
 <p>One run drives the whole lifecycle the way the apps will: it stages real data from a live Wolffish workspace, pairs by QR, hand-shakes, audits the wire, tries to break in, syncs configuration and conversations, streams a real agent turn, and moves files — including a 248 MB PDF that is deliberately interrupted mid-flight to prove resume.</p>
@@ -436,7 +436,7 @@
 <h3>The big one — miller.pdf</h3>
 <div class="flow">
   <div class="node"><div class="t">Desktop</div><div class="p">248.1 MB</div><div class="p">source of truth</div></div>
-  <div class="arrow">── sealed, chunked ──▶<br />0.94 MB/s (8 Mbps)<br />4m 23s · resumed at chunk 160</div>
+  <div class="arrow">── sealed, chunked ──▶<br />1.55 MB/s (13 Mbps)<br />2m 40s · resumed at chunk 160</div>
   <div class="node"><div class="t">Phone</div><div class="p">248.1 MB</div><div class="p ok">sha256 verified identical</div></div>
 </div>
 <p class="muted" style="font-size:.9rem">The phone's socket was terminated outright partway through. It reconnected, ran a fresh handshake, asked to continue from its checkpoint, and finished — with the final hash matching the source byte for byte.</p>
@@ -447,40 +447,40 @@
 <tbody>
 <tr><td>Stage from the published demo dataset</td><td class="muted">manifest, conversations, config and files — all from the CDN</td>
   <td class="num ok">4/4</td>
-  <td class="num">29.3 s</td></tr>
+  <td class="num">738 ms</td></tr>
 <tr><td>Pair by QR code</td><td class="muted">desktop shows, mobile scans, both derive the same rendezvous ID</td>
   <td class="num ok">3/3</td>
-  <td class="num">43 ms</td></tr>
+  <td class="num">38 ms</td></tr>
 <tr><td>Connect and hand-shake</td><td class="muted">Noise IKpsk2 over the live relay</td>
   <td class="num ok">4/4</td>
-  <td class="num">1.7 s</td></tr>
+  <td class="num">2.2 s</td></tr>
 <tr><td>Prove the wire is opaque</td><td class="muted">ciphertext audit on live frames plus integrity probes</td>
   <td class="num ok">7/7</td>
-  <td class="num">218 ms</td></tr>
+  <td class="num">1.3 s</td></tr>
 <tr><td>Resist intruders</td><td class="muted">wrong rendezvous ID, and a scanner-less impostor</td>
   <td class="num ok">5/5</td>
-  <td class="num">5.2 s</td></tr>
+  <td class="num">4.7 s</td></tr>
 <tr><td>Sync configuration</td><td class="muted">the desktop config.json, projected for a phone</td>
   <td class="num ok">3/3</td>
-  <td class="num">388 ms</td></tr>
+  <td class="num">350 ms</td></tr>
 <tr><td>Sync conversations</td><td class="muted">index first, then full bodies on demand</td>
   <td class="num ok">2/2</td>
-  <td class="num">1.7 s</td></tr>
+  <td class="num">1.8 s</td></tr>
 <tr><td>Run a live conversation</td><td class="muted">mobile asks, desktop streams a real agent turn back</td>
   <td class="num ok">3/3</td>
-  <td class="num">696 ms</td></tr>
+  <td class="num">719 ms</td></tr>
 <tr><td>Move files</td><td class="muted">published sample files plus deliberately awkward ones</td>
   <td class="num ok">12/12</td>
-  <td class="num">7.3 s</td></tr>
+  <td class="num">5.8 s</td></tr>
 <tr><td>Reverse direction — the phone serves the desktop</td><td class="muted">device tools, a remote invocation, and an upload</td>
   <td class="num ok">6/6</td>
-  <td class="num">2.2 s</td></tr>
+  <td class="num">2.0 s</td></tr>
 <tr><td>Move the 248 MB PDF, and survive a dropout</td><td class="muted">the phone loses signal mid-transfer and resumes</td>
   <td class="num ok">4/4</td>
-  <td class="num">4m 23s</td></tr>
+  <td class="num">2m 40s</td></tr>
 <tr><td>Verify delivery</td><td class="muted">compare every artifact on both sides</td>
   <td class="num ok">2/2</td>
-  <td class="num">276 ms</td></tr>
+  <td class="num">280 ms</td></tr>
 </tbody></table></div>
 
 <h3>Transfers</h3>
@@ -488,57 +488,61 @@
 <thead><tr><th>File</th><th>Origin</th><th class="num">Size</th><th class="num">Time</th><th class="num">Throughput</th><th>Result</th></tr></thead>
 <tbody>
 <tr><td><code>wolffish-sample.png</code></td><td class="muted">samples/png</td>
-  <td class="num">35.7 KB</td><td class="num">547 ms</td><td class="num">0.06 MB/s (1 Mbps)</td>
+  <td class="num">35.7 KB</td><td class="num">513 ms</td><td class="num">0.07 MB/s (1 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.md</code></td><td class="muted">samples/md</td>
-  <td class="num">550 B</td><td class="num">518 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">550 B</td><td class="num">503 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.json</code></td><td class="muted">samples/json</td>
-  <td class="num">497 B</td><td class="num">465 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">497 B</td><td class="num">449 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.html</code></td><td class="muted">samples/html</td>
-  <td class="num">773 B</td><td class="num">477 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">773 B</td><td class="num">474 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.pdf</code></td><td class="muted">samples/pdf</td>
-  <td class="num">56.8 KB</td><td class="num">514 ms</td><td class="num">0.11 MB/s (1 Mbps)</td>
+  <td class="num">56.8 KB</td><td class="num">529 ms</td><td class="num">0.10 MB/s (1 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.gif</code></td><td class="muted">samples/gif</td>
-  <td class="num">28.1 KB</td><td class="num">684 ms</td><td class="num">0.04 MB/s (0 Mbps)</td>
+  <td class="num">28.1 KB</td><td class="num">520 ms</td><td class="num">0.05 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.mp4</code></td><td class="muted">samples/mp4</td>
-  <td class="num">629.8 KB</td><td class="num">1.5 s</td><td class="num">0.42 MB/s (3 Mbps)</td>
+  <td class="num">629.8 KB</td><td class="num">1.1 s</td><td class="num">0.59 MB/s (5 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>wolffish-sample.docx</code></td><td class="muted">samples/docx</td>
-  <td class="num">4.3 KB</td><td class="num">705 ms</td><td class="num">0.01 MB/s (0 Mbps)</td>
+  <td class="num">4.3 KB</td><td class="num">479 ms</td><td class="num">0.01 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>empty-marker.txt</code></td><td class="muted">generated (zero-byte edge case)</td>
-  <td class="num">0 B</td><td class="num">229 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">0 B</td><td class="num">222 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>تقرير-المزامنة-٢٠٢٦.txt</code></td><td class="muted">generated (RTL filename edge case)</td>
-  <td class="num">140 B</td><td class="num">438 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">140 B</td><td class="num">469 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>chunk-boundary.bin</code></td><td class="muted">generated (chunk-boundary edge case)</td>
-  <td class="num">256.0 KB</td><td class="num">1.2 s</td><td class="num">0.21 MB/s (2 Mbps)</td>
+  <td class="num">256.0 KB</td><td class="num">560 ms</td><td class="num">0.45 MB/s (4 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>camera-capture.jpg</code></td><td class="muted">phone camera roll → desktop</td>
-  <td class="num">59.2 KB</td><td class="num">955 ms</td><td class="num">0.06 MB/s (1 Mbps)</td>
+  <td class="num">59.2 KB</td><td class="num">840 ms</td><td class="num">0.07 MB/s (1 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>voice-memo.md</code></td><td class="muted">phone recording → desktop</td>
-  <td class="num">141 B</td><td class="num">551 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
+  <td class="num">141 B</td><td class="num">470 ms</td><td class="num">0.00 MB/s (0 Mbps)</td>
   <td class="ok">delivered</td></tr>
 <tr><td><code>miller.pdf</code></td><td class="muted">cdn.wolffi.sh/generic/miller.pdf</td>
-  <td class="num">248.1 MB</td><td class="num">4m 23s</td><td class="num">0.94 MB/s (8 Mbps)</td>
+  <td class="num">248.1 MB</td><td class="num">2m 40s</td><td class="num">1.55 MB/s (13 Mbps)</td>
   <td class="ok">delivered · resumed</td></tr>
 </tbody></table></div>
 <p class="muted" style="font-size:.88rem">Both endpoints run on one machine during the example, sharing a single uplink — read these as a floor, not a ceiling. Small files are latency-bound (two protocol round trips before the first byte); large files are bandwidth-bound.</p>
 
 <h3>What the relay actually carried</h3>
 <p>These are the first bytes of real frames, captured at the socket boundary — exactly the bytes the relay forwarded during this run.</p>
-<div class="wrap"><pre>guest→relay         152 B  noise msg1     011ef75ee1828c8305a40ea552bc90debaa73c4ec70c3e80c28a41f4811eed8f64cf347f0a979d71b9c36e5bfe6ab96f…
-host→relay          104 B  noise msg2     015dc9bc797d656790a9a383ffced901dc37bd5a387b752f5d235ffe9bcc86a81388b2d94ddc5a4fac972e91c6b7616a…
-guest→relay          62 B  RPC_REQ        029ccfb207550f165d9c936709bb72c53187ba31e713e1c3f2f68e760cdf2db2741b9347a09b3878a950648f8e8992c8…
-host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b5945163fbe7f83af294daf09220b440ea82708c63263981385202352ab88a79354…</pre></div>
-<p>Across 4 frames and 456 B, the captured ciphertext measures <strong>7.545 bits per byte</strong> of entropy — 8.0 is indistinguishable from random noise. No plaintext marker searched for appears anywhere in it, including the <code>%PDF</code> header of the file being transferred at the time.</p>
+<div class="wrap"><pre>guest→relay         152 B  noise msg1     01885d3cbeac7528c1741b64d89affc4917437284f9f5ec29a7b40ff14628d004a932ccafe241b72a8c2ea38225b3441…
+host→relay          104 B  noise msg2     01bdf4110a7fb9b2edca339f3d4d2dd98151d9a0bc7deade894fc3adc292629174389acab446b6069911e673e609219c…
+guest→relay          62 B  RPC_REQ        02c20111156b324e16f2fd067ab8cc0c689ec4402726d7c1f63692310d1ffd7b2323feface2bced973bfc0b08d8ed732…
+host→relay          138 B  RPC_RES        02aec9eee841e807a1a2bccea3876d7616614a385f106cb6f585115f54691863d6e5a2b06e2effc22df647eec0831fff…
+guest→relay          68 B  RPC_REQ        0208c6680764a345ab0026a4c1fe5f85267105ecadffe1ee3185c97c926b2e9e3dbde125e046ff0833223cbf8f5c7537…
+host→relay         2380 B  RPC_RES        02dc6fa08d38e8be5f9f4686734ab94cdd1473923c623a0b93f5cbdc4057c254e9ee28d017b92af9b22befc9dd4f7f8c…
+guest→relay          86 B  RPC_REQ        027c37796003aa4629b0f42b1d16e973b45b3b826b77776117f804018e187445bd03a3acbe342c151eeef5b6bb509fd2…
+host→relay         8308 B  RPC_RES        028a2a04317ecc2b7d1896a10e01c8449511c23f7c7b23bd7168bbf720e50ed0ff2541b3900723ddb90aab4f4d31a7b5…</pre></div>
+<p>Across 12 frames and 17.4 KB, the captured ciphertext measures <strong>7.977 bits per byte</strong> of entropy — 8.0 is indistinguishable from random noise. No plaintext marker searched for appears anywhere in it, including the <code>%PDF</code> header of the file being transferred at the time.</p>
 
 <h3>Every check</h3>
 <div class="wrap"><table>
@@ -555,13 +559,13 @@ host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b594516
 <tr><td class="ok">✓</td><td>QR carries the desktop static key</td>
   <td class="muted"></td><td class="muted">Pair by QR code</td></tr>
 <tr><td class="ok">✓</td><td>both sides derive the same rendezvous ID</td>
-  <td class="muted">2356b96373548bbd…</td><td class="muted">Pair by QR code</td></tr>
+  <td class="muted">eb5b54a0c6c9304d…</td><td class="muted">Pair by QR code</td></tr>
 <tr><td class="ok">✓</td><td>rendezvous ID is 256-bit lowercase hex</td>
   <td class="muted"></td><td class="muted">Pair by QR code</td></tr>
 <tr><td class="ok">✓</td><td>desktop pinned the real mobile static key</td>
   <td class="muted"></td><td class="muted">Connect and hand-shake</td></tr>
 <tr><td class="ok">✓</td><td>both sides agree on the handshake transcript hash</td>
-  <td class="muted">0e473307131a6564ec7af8a1…</td><td class="muted">Connect and hand-shake</td></tr>
+  <td class="muted">107e8961736525cc874d4cc2…</td><td class="muted">Connect and hand-shake</td></tr>
 <tr><td class="ok">✓</td><td>desktop identity received by mobile</td>
   <td class="muted"></td><td class="muted">Connect and hand-shake</td></tr>
 <tr><td class="ok">✓</td><td>mobile identity received by desktop</td>
@@ -570,8 +574,8 @@ host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b594516
   <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
 <tr><td class="ok">✓</td><td>no plaintext markers found in captured ciphertext</td>
   <td class="muted">5 needles searched</td><td class="muted">Prove the wire is opaque</td></tr>
-<tr><td class="ok">✓</td><td>captured frames are high-entropy</td>
-  <td class="muted">7.545 bits/byte over 456 B</td><td class="muted">Prove the wire is opaque</td></tr>
+<tr><td class="ok">✓</td><td>captured frames are indistinguishable from random</td>
+  <td class="muted">7.977 bits/byte over 8.8 KB (random would score 7.980)</td><td class="muted">Prove the wire is opaque</td></tr>
 <tr><td class="ok">✓</td><td>sealed frame does not contain its plaintext</td>
   <td class="muted"></td><td class="muted">Prove the wire is opaque</td></tr>
 <tr><td class="ok">✓</td><td>a single flipped bit fails authentication</td>
@@ -591,7 +595,7 @@ host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b594516
 <tr><td class="ok">✓</td><td>the real session survived the probes</td>
   <td class="muted"></td><td class="muted">Resist intruders</td></tr>
 <tr><td class="ok">✓</td><td>every config section arrived</td>
-  <td class="muted">12 sections in 388 ms</td><td class="muted">Sync configuration</td></tr>
+  <td class="muted">12 sections in 348 ms</td><td class="muted">Sync configuration</td></tr>
 <tr><td class="ok">✓</td><td>credentials were replaced before leaving the desktop</td>
   <td class="muted"></td><td class="muted">Sync configuration</td></tr>
 <tr><td class="ok">✓</td><td>demo settings survived the trip</td>
@@ -607,27 +611,27 @@ host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b594516
 <tr><td class="ok">✓</td><td>tool-run event delivered</td>
   <td class="muted"></td><td class="muted">Run a live conversation</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.png</td>
-  <td class="muted">35.7 KB · 547 ms · 0.06 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">35.7 KB · 513 ms · 0.07 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.md</td>
-  <td class="muted">550 B · 518 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">550 B · 503 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.json</td>
-  <td class="muted">497 B · 465 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">497 B · 449 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.html</td>
-  <td class="muted">773 B · 477 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">773 B · 474 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.pdf</td>
-  <td class="muted">56.8 KB · 514 ms · 0.11 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">56.8 KB · 529 ms · 0.10 MB/s (1 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.gif</td>
-  <td class="muted">28.1 KB · 684 ms · 0.04 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">28.1 KB · 520 ms · 0.05 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.mp4</td>
-  <td class="muted">629.8 KB · 1.5 s · 0.42 MB/s (3 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">629.8 KB · 1.1 s · 0.59 MB/s (5 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered wolffish-sample.docx</td>
-  <td class="muted">4.3 KB · 705 ms · 0.01 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">4.3 KB · 479 ms · 0.01 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered empty-marker.txt</td>
-  <td class="muted">0 B · 229 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">0 B · 222 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered تقرير-المزامنة-٢٠٢٦.txt</td>
-  <td class="muted">140 B · 438 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">140 B · 469 ms · 0.00 MB/s (0 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>delivered chunk-boundary.bin</td>
-  <td class="muted">256.0 KB · 1.2 s · 0.21 MB/s (2 Mbps)</td><td class="muted">Move files</td></tr>
+  <td class="muted">256.0 KB · 560 ms · 0.45 MB/s (4 Mbps)</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>every file completed on the mobile side</td>
   <td class="muted">11/11</td><td class="muted">Move files</td></tr>
 <tr><td class="ok">✓</td><td>desktop fetched the phone&#39;s own tool definitions</td>
@@ -637,9 +641,9 @@ host→relay          138 B  RPC_RES        024086a4605a17b8422a6a48c9760b594516
 <tr><td class="ok">✓</td><td>desktop invoked a tool that only the phone can run</td>
   <td class="muted"></td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
 <tr><td class="ok">✓</td><td>phone uploaded camera-capture.jpg</td>
-  <td class="muted">59.2 KB · 955 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+  <td class="muted">59.2 KB · 840 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
 <tr><td class="ok">✓</td><td>phone uploaded voice-memo.md</td>
-  <td class="muted">141 B · 551 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
+  <td class="muted">141 B · 470 ms</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
 <tr><td class="ok">✓</td><td>uploads are byte-identical on the desktop</td>
   <td class="muted">2/2</td><td class="muted">Reverse direction — the phone serves the desktop</td></tr>
 <tr><td class="ok">✓</td><td>the transfer really was interrupted mid-flight</td>
