@@ -20,19 +20,27 @@
     "lint": "eslint --cache .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "release": "npm version patch && git push origin main --tags"
+    "release": "npm version patch && git push origin main --tags",
+    "playground": "node playground/run.mjs",
+    "playground:quick": "node playground/run.mjs --quick",
+    "playground:local": "node playground/run.mjs --relay ws://localhost:8787"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.1",
     "@cloudflare/workers-types": "^5.20260801.1",
     "@eslint/js": "^10.0.1",
+    "@noble/ciphers": "^2.2.0",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
+    "qrcode": "^1.5.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10",
-    "wrangler": "^4.118.0"
+    "wrangler": "^4.118.0",
+    "ws": "^8.21.1"
   },
   "allowScripts": {
     "workerd@1.20260730.1": true

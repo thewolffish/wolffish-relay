@@ -14,5 +14,24 @@ export default defineConfig(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
     }
   },
+  {
+    // The playground is a Node harness, not Worker code — it gets Node globals.
+    files: ['playground/**/*.mjs', 'eslint.config.mjs', '*.config.ts'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
+        URL: 'readonly',
+        clearInterval: 'readonly',
+        clearTimeout: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        process: 'readonly',
+        setInterval: 'readonly',
+        setTimeout: 'readonly'
+      }
+    }
+  },
   eslintConfigPrettier
 )

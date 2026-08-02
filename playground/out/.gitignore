@@ -1,0 +1,3 @@
+# Everything a run produces is disposable evidence — never committed.
+*
+!.gitignore

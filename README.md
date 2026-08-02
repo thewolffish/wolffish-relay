@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel — a single Cloudflare Worker with one Durable Object class that introduces a desktop (`host`) and a mobile device (`guest`) by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.3-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.4-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 ---
@@ -78,10 +78,17 @@ Residual trust, stated honestly: Cloudflare terminates TLS at its edge and keeps
 | ------------------------------------------------------- | ------------------------------------------------------------------ |
 | `npm run dev`                                           | Local relay on `localhost:8787` via `wrangler dev`                 |
 | `npm test`                                              | Full contract suite in workerd (`@cloudflare/vitest-pool-workers`) |
+| `npm run playground`                                    | Drive the whole tunnel end to end against the live relay           |
 | `npm run typecheck` / `npm run lint` / `npm run format` | The usual guards                                                   |
 | `npm run release`                                       | Version bump + tag push → CI deploys to Cloudflare                 |
 
 Requirements: Node 24+, npm 11+.
+
+## Playground
+
+`npm test` proves the relay's contract in isolation. [`playground/`](playground/) proves the whole system: it stands up both ends of the tunnel, pairs them by QR, runs a Noise IKpsk2 handshake, and moves real Wolffish data — configs, conversation lists and bodies, a live agent turn, and files up to 248 MB — over the live relay, interrupting the phone mid-transfer to prove resume works.
+
+Each run verifies delivery byte for byte, audits the captured ciphertext, and writes a visual report plus the actually-delivered files to `playground/out/` (gitignored). See [playground/README.md](playground/README.md) for the phase list and how to extend it.
 
 ## Deployment
 
