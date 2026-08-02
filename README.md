@@ -34,12 +34,12 @@ Every data frame is sealed by the clients (Noise-pattern handshake, per-session 
 
 ### Endpoints
 
-| Route                                               | Behavior                      |
-| --------------------------------------------------- | ----------------------------- |
-| `GET /t/<rid>?role=host\|guest` + WebSocket upgrade | Join the tunnel for `rid`     |
-| `GET /healthz`                                      | `200 ok`                      |
-| `GET /`                                             | One-line project pointer      |
-| anything else                                       | `404` / `400` / `405` / `426` |
+| Route                                               | Behavior                                                    |
+| --------------------------------------------------- | ----------------------------------------------------------- |
+| `GET /t/<rid>?role=host\|guest` + WebSocket upgrade | Join the tunnel for `rid`                                   |
+| `GET /healthz`                                      | `200 ok`                                                    |
+| `GET /`                                             | Landing page — status, version, how it works (HEAD allowed) |
+| anything else                                       | `404` / `400` / `405` / `426`                               |
 
 `rid` must match `^[0-9a-f]{64}$`. `host` is the parked, always-on side (desktop); `guest` comes and goes (mobile).
 
