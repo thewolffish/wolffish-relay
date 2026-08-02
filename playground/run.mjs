@@ -53,6 +53,15 @@ async function main() {
   for (const dir of [dirs.desktop, dirs.mobile]) await fs.rm(dir, { recursive: true, force: true })
   for (const dir of Object.values(dirs)) await fs.mkdir(dir, { recursive: true })
 
+  // Restore the guard that lives inside this directory. Deleting `out/` takes
+  // it with them, and a 248 MB cached PDF is exactly the kind of thing that
+  // then walks into a commit. (The root .gitignore covers this too — belt and
+  // braces, because one of these is easy to delete by accident.)
+  await fs.writeFile(
+    path.join(outDir, '.gitignore'),
+    '# Everything a run produces is disposable evidence — never committed.\n*\n!.gitignore\n'
+  )
+
   console.log(`\n\x1b[1mWolffish tunnel — full cycle\x1b[0m`)
   console.log(
     `\x1b[90mrelay ${options.relay}${options.quick ? '  ·  quick run (no big file)' : ''}\x1b[0m`
