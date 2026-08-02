@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel — a single Cloudflare Worker with one Durable Object class that introduces a desktop (`host`) and a mobile device (`guest`) by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.1-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 ---
