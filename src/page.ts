@@ -12,9 +12,25 @@ export function landingPage(version: string): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark light" />
-<meta name="description" content="Zero-retention rendezvous relay for the Wolffish tunnel. End-to-end encrypted, nothing stored, nothing logged." />
-<title>wolffish relay</title>
+<meta name="theme-color" content="#040a18" />
+<title>Wolffish Relay: The Zero-Retention Tunnel Rendezvous</title>
+<meta name="description" content="The meeting point for the Wolffish tunnel. Your desktop and phone dial out, meet under an unguessable rendezvous ID, and exchange end-to-end encrypted frames. Nothing stored, nothing logged — the relay only ever sees ciphertext." />
 <link rel="icon" type="image/png" href="https://cdn.wolffi.sh/generic/icon.png" />
+<link rel="apple-touch-icon" href="https://cdn.wolffi.sh/generic/icon.png" />
+<meta property="og:title" content="Wolffish Relay: The Zero-Retention Tunnel Rendezvous" />
+<meta property="og:description" content="The meeting point for the Wolffish tunnel. Your desktop and phone dial out, meet under an unguessable rendezvous ID, and exchange end-to-end encrypted frames. Nothing stored, nothing logged — the relay only ever sees ciphertext." />
+<meta property="og:url" content="https://relay.wolffi.sh" />
+<meta property="og:site_name" content="Wolffish" />
+<meta property="og:image" content="https://cdn.wolffi.sh/generic/banner.jpg" />
+<meta property="og:image:width" content="2540" />
+<meta property="og:image:height" content="1520" />
+<meta property="og:image:alt" content="Wolffish" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Wolffish Relay: The Zero-Retention Tunnel Rendezvous" />
+<meta name="twitter:description" content="The meeting point for the Wolffish tunnel. Your desktop and phone dial out, meet under an unguessable rendezvous ID, and exchange end-to-end encrypted frames. Nothing stored, nothing logged — the relay only ever sees ciphertext." />
+<meta name="twitter:image" content="https://cdn.wolffi.sh/generic/banner.jpg" />
 <style>
   :root {
     --bg: #0a0f1b;

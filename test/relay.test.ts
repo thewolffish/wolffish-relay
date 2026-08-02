@@ -92,6 +92,9 @@ describe('front door', () => {
     expect(body).toContain('wolffish')
     expect(body).toContain(`v${version}`)
     expect(body).toContain('github.com/thewolffish/wolffish-relay')
+    expect(body).toContain('og:image')
+    expect(body).toContain('https://cdn.wolffi.sh/generic/banner.jpg')
+    expect(body).toContain('summary_large_image')
     expect(body).not.toContain('<script')
   })
 
@@ -104,6 +107,14 @@ describe('front door', () => {
   it('rejects non-GET methods', async () => {
     const response = await SELF.fetch(`https://relay.test/t/${RID_A}?role=host`, { method: 'POST' })
     expect(response.status).toBe(405)
+  })
+
+  it('answers HEAD for uptime checks', async () => {
+    const health = await SELF.fetch('https://relay.test/healthz', { method: 'HEAD' })
+    expect(health.status).toBe(200)
+    const page = await SELF.fetch('https://relay.test/', { method: 'HEAD' })
+    expect(page.status).toBe(200)
+    expect(page.headers.get('content-type')).toContain('text/html')
   })
 
   it('404s malformed rendezvous ids', async () => {

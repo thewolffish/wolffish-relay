@@ -24,7 +24,10 @@ const LANDING_HEADERS = {
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method !== 'GET') return new Response('method not allowed', { status: 405 })
+    // HEAD is allowed on the plain routes (uptime checks); the runtime strips the body.
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return new Response('method not allowed', { status: 405 })
+    }
 
     const url = new URL(request.url)
 
