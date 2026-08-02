@@ -1,5 +1,6 @@
 import { SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
+import { version } from '../package.json'
 import { CloseCode, KEEPALIVE, MAX_MESSAGE_BYTES } from '../src/protocol'
 
 const RID_A = 'a'.repeat(64)
@@ -82,10 +83,16 @@ async function expectBinary(frame: string | ArrayBuffer): Promise<Uint8Array> {
 }
 
 describe('front door', () => {
-  it('serves a project pointer at the root', async () => {
+  it('serves the landing page at the root', async () => {
     const response = await SELF.fetch('https://relay.test/')
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('wolffish relay')
+    expect(response.headers.get('content-type')).toContain('text/html')
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
+    const body = await response.text()
+    expect(body).toContain('wolffish')
+    expect(body).toContain(`v${version}`)
+    expect(body).toContain('github.com/thewolffish/wolffish-relay')
+    expect(body).not.toContain('<script')
   })
 
   it('serves a health probe', async () => {
