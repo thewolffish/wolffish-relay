@@ -98,6 +98,21 @@ describe('front door', () => {
     expect(body).not.toContain('<script')
   })
 
+  it('the landing page explains what the relay can and cannot do', async () => {
+    const body = await (await SELF.fetch('https://relay.test/')).text()
+    // How it works
+    for (const beat of ['Meet.', 'Move.', 'Forget.']) expect(body).toContain(beat)
+    // Capabilities and their honest limits
+    for (const claim of ['Cannot read', 'Cannot forge', 'Cannot alter', 'Cannot replay', 'Can see'])
+      expect(body).toContain(claim)
+    // Retention — the promise a visitor most wants to check
+    expect(body).toContain('What is stored here')
+    expect(body).toContain('Message history')
+    expect(body).toContain('0 B')
+    // A way to go deeper
+    expect(body).toContain('https://cdn.wolffi.sh/generic/relay.html')
+  })
+
   it('serves a health probe', async () => {
     const response = await SELF.fetch('https://relay.test/healthz')
     expect(response.status).toBe(200)

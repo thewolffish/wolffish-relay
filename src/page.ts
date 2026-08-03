@@ -118,6 +118,27 @@ export function landingPage(version: string): string {
   .how p { font-size: 0.94rem; color: var(--muted); }
   .how p + p { margin-top: 0.85rem; }
   .how strong { color: var(--fg); font-weight: 600; }
+  .how + .how { margin-top: 1rem; }
+  .facts { list-style: none; margin: 0; padding: 0; }
+  .facts li {
+    display: flex; gap: 0.7rem; align-items: baseline;
+    font-size: 0.91rem; color: var(--muted); padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .facts li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .facts li:first-child { padding-top: 0; }
+  .facts b { color: var(--fg); font-weight: 600; flex: 0 0 8.5rem; }
+  .facts .no { color: var(--green); font-weight: 650; }
+  @media (max-width: 30rem) {
+    .facts li { flex-direction: column; gap: 0.1rem; }
+    .facts b { flex: none; }
+  }
+  .more {
+    display: inline-block; margin-top: 1rem; font-size: 0.88rem;
+    color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line);
+    padding-bottom: 1px;
+  }
+  .more:hover { border-bottom-color: currentColor; }
   .gh {
     display: inline-flex; align-items: center; gap: 0.6rem;
     margin-top: 1.9rem; padding: 0.68rem 1.15rem; border-radius: 12px;
@@ -147,6 +168,29 @@ export function landingPage(version: string): string {
     <p><strong>Meet.</strong> A desktop and a mobile device both dial out and meet here under an unguessable 256-bit rendezvous ID — no accounts, no port forwarding, at most two sockets per tunnel.</p>
     <p><strong>Move.</strong> Every frame is sealed end-to-end on the devices before it arrives. The relay forwards ciphertext verbatim — it cannot read, alter, or replay anything.</p>
     <p><strong>Forget.</strong> Zero retention by construction: no storage, no logs, no analytics. When the sockets close, nothing remains anywhere.</p>
+  </section>
+  <section class="how">
+    <h2>What it can and cannot do</h2>
+    <ul class="facts">
+      <li><b>Cannot read</b><span>Frames are sealed on-device with ChaCha20-Poly1305 under keys the relay never sees.</span></li>
+      <li><b>Cannot forge</b><span>Devices authenticate each other with pinned keys and a pairing secret shared by QR, never over the network.</span></li>
+      <li><b>Cannot alter</b><span>Every frame is authenticated — one flipped bit fails the tag and is discarded.</span></li>
+      <li><b>Cannot replay</b><span>Fresh keys each session, with a strictly increasing counter. Past traffic stays unreadable even if a device key later leaks.</span></li>
+      <li><b>Can see</b><span>While sockets are live: two IP addresses, the rendezvous ID, and the timing and size of frames. Recorded nowhere.</span></li>
+    </ul>
+  </section>
+  <section class="how">
+    <h2>What is stored here</h2>
+    <ul class="facts">
+      <li><b>Databases</b><span class="no">none</span></li>
+      <li><b>Logs &amp; traces</b><span class="no">none</span></li>
+      <li><b>Analytics</b><span class="no">none</span></li>
+      <li><b>Accounts</b><span class="no">none</span></li>
+      <li><b>Message history</b><span class="no">none</span></li>
+      <li><b>In memory</b><span>Two live sockets and a role tag, for as long as both devices are connected.</span></li>
+    </ul>
+    <p style="margin-top:0.9rem">The storage meters read <strong>0 B</strong> after a verification run moved 249 MB through this relay. Nothing was written, so there is nothing to delete, leak, or subpoena.</p>
+    <a class="more" href="https://cdn.wolffi.sh/generic/relay.html">Read the full reference, with a verified example run &rarr;</a>
   </section>
   <a class="gh" href="https://github.com/thewolffish/wolffish-relay">
     <img src="https://cdn.wolffi.sh/generic/github.png" alt="" width="20" height="20" />
