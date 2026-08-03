@@ -25,6 +25,7 @@ import { hmac } from '@noble/hashes/hmac.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 
 export const PROTOCOL_NAME = 'Noise_IKpsk2_25519_ChaChaPoly_SHA256'
+export const PROTOCOL_NAME_XX = 'Noise_XXpsk3_25519_ChaChaPoly_SHA256'
 export const KEY_LEN = 32
 export const TAG_LEN = 16
 
@@ -209,5 +210,101 @@ export class Responder {
     const message = concat(this.e.publicKey, this.state.encryptAndHash(payload))
     const [receive, send] = this.state.split() // mirror of the initiator's split
     return { message, send, receive, handshakeHash: this.state.h }
+  }
+}
+
+/**
+ * Noise_XXpsk3_25519_ChaChaPoly_SHA256 — pairing from a typed code.
+ *
+ * IK needs the initiator to already hold the responder's static key, which is
+ * why the QR carries it. A short code cannot: 64 hex characters of public key
+ * is not something anyone types. XX solves it by exchanging both static keys
+ * *inside* the handshake, so the code only has to carry the secret. The PSK
+ * still authenticates everything — mixed at position 3, once both statics are
+ * on the table — and both sides pin the key they learned.
+ *
+ *   XXpsk3:
+ *     -> e
+ *     <- e, ee, s, es
+ *     -> s, se, psk
+ *
+ * Three messages rather than two, so pairing costs one extra half round trip.
+ * That price is paid once: afterwards both devices hold pinned keys and every
+ * reconnect uses IKpsk2 exactly as a QR pairing would.
+ */
+export class InitiatorXX {
+  constructor({ staticKeypair, psk, prologue = EMPTY }) {
+    this.s = staticKeypair
+    this.psk = psk
+    this.state = new SymmetricState(PROTOCOL_NAME_XX)
+    this.state.mixHash(prologue)
+  }
+
+  /** -> e */
+  writeMessage1(payload = EMPTY) {
+    this.e = generateKeypair()
+    this.state.mixHash(this.e.publicKey)
+    return concat(this.e.publicKey, this.state.encryptAndHash(payload))
+  }
+
+  /** <- e, ee, s, es */
+  readMessage2(message) {
+    this.re = message.subarray(0, KEY_LEN)
+    this.state.mixHash(this.re)
+    this.state.mixKey(dh(this.e.privateKey, this.re)) // ee
+    const encryptedStatic = message.subarray(KEY_LEN, KEY_LEN + KEY_LEN + TAG_LEN)
+    this.rs = this.state.decryptAndHash(encryptedStatic) // peer's static key — pin this
+    this.state.mixKey(dh(this.e.privateKey, this.rs)) // es
+    return {
+      payload: this.state.decryptAndHash(message.subarray(KEY_LEN + KEY_LEN + TAG_LEN)),
+      remoteStaticPublicKey: this.rs
+    }
+  }
+
+  /** -> s, se, psk */
+  writeMessage3(payload = EMPTY) {
+    const encryptedStatic = this.state.encryptAndHash(this.s.publicKey)
+    this.state.mixKey(dh(this.s.privateKey, this.re)) // se
+    this.state.mixKeyAndHash(this.psk) // psk
+    const message = concat(encryptedStatic, this.state.encryptAndHash(payload))
+    const [send, receive] = this.state.split()
+    return { message, send, receive, handshakeHash: this.state.h }
+  }
+}
+
+export class ResponderXX {
+  constructor({ staticKeypair, psk, prologue = EMPTY }) {
+    this.s = staticKeypair
+    this.psk = psk
+    this.state = new SymmetricState(PROTOCOL_NAME_XX)
+    this.state.mixHash(prologue)
+  }
+
+  /** -> e */
+  readMessage1(message) {
+    this.re = message.subarray(0, KEY_LEN)
+    this.state.mixHash(this.re)
+    return { payload: this.state.decryptAndHash(message.subarray(KEY_LEN)) }
+  }
+
+  /** <- e, ee, s, es */
+  writeMessage2(payload = EMPTY) {
+    this.e = generateKeypair()
+    this.state.mixHash(this.e.publicKey)
+    this.state.mixKey(dh(this.e.privateKey, this.re)) // ee
+    const encryptedStatic = this.state.encryptAndHash(this.s.publicKey)
+    this.state.mixKey(dh(this.s.privateKey, this.re)) // es
+    return concat(this.e.publicKey, encryptedStatic, this.state.encryptAndHash(payload))
+  }
+
+  /** -> s, se, psk */
+  readMessage3(message) {
+    const encryptedStatic = message.subarray(0, KEY_LEN + TAG_LEN)
+    this.rs = this.state.decryptAndHash(encryptedStatic) // peer's static key — pin this
+    this.state.mixKey(dh(this.e.privateKey, this.rs)) // se
+    this.state.mixKeyAndHash(this.psk) // psk
+    const payload = this.state.decryptAndHash(message.subarray(KEY_LEN + TAG_LEN))
+    const [receive, send] = this.state.split() // mirror of the initiator's split
+    return { payload, remoteStaticPublicKey: this.rs, send, receive, handshakeHash: this.state.h }
   }
 }

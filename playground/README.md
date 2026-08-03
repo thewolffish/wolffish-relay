@@ -22,20 +22,21 @@ npm run playground:local    # drive `npm run dev` instead of production
 
 ## What one run does
 
-| Phase                       | What it proves                                                                                                                                                             |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage from the demo dataset | The CDN manifest, conversation shards, config snapshot and per-type sample files are fetched and staged into a run-local folder that acts as the desktop's source of truth |
-| Pair by QR code             | A scannable PNG is generated, "scanned", and both sides independently derive the same 256-bit rendezvous ID                                                                |
-| Connect and hand-shake      | Noise IKpsk2 over the live relay: mutual authentication, key pinning, forward secrecy, matching transcript hashes                                                          |
-| Prove the wire is opaque    | Live captured frames contain no plaintext markers and are high-entropy; flipped bits and wrong keys are rejected; the right key round-trips                                |
-| Resist intruders            | A socket on another rendezvous ID hears nothing; an impostor who knows the rendezvous ID but never scanned the QR cannot complete the handshake or forge a frame           |
-| Sync configuration          | The desktop's real `config.json` arrives section-complete, with credentials redacted **before** they leave the desktop                                                     |
-| Sync conversations          | Index first, then full bodies on demand — compared byte for byte against the originals                                                                                     |
-| Run a live conversation     | A real agent turn streams back as deltas and tool events, reassembled exactly on the phone                                                                                 |
-| Reverse direction           | The phone serves the desktop: it advertises its own tools, the desktop invokes one, and the phone uploads files the desktop never had                                      |
-| Move files                  | Real workspace files plus deliberate edge cases: a zero-byte file, an Arabic (RTL) filename, and a payload one byte past the chunk boundary                                |
-| Move the 248 MB PDF         | `miller.pdf` transfers while the phone is forcibly disconnected mid-flight, then resumes from its checkpoint and verifies sha256 end to end                                |
-| Verify delivery             | Every file on both sides is hashed and compared; no partial files may remain                                                                                               |
+| Phase                       | What it proves                                                                                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage from the demo dataset | The CDN manifest, conversation shards, config snapshot and per-type sample files are fetched and staged into a run-local folder that acts as the desktop's source of truth                                        |
+| Pair by QR code             | A scannable PNG is generated, "scanned", and both sides independently derive the same 256-bit rendezvous ID                                                                                                       |
+| Pair by typed code          | An 8-character code pairs with Noise XXpsk3 — neither side knows the other's key in advance; sloppy typing is folded, a working tunnel moves a file, and the pair then reconnects with IKpsk2 against pinned keys |
+| Connect and hand-shake      | Noise IKpsk2 over the live relay: mutual authentication, key pinning, forward secrecy, matching transcript hashes                                                                                                 |
+| Prove the wire is opaque    | Live captured frames contain no plaintext markers and are high-entropy; flipped bits and wrong keys are rejected; the right key round-trips                                                                       |
+| Resist intruders            | A socket on another rendezvous ID hears nothing; an impostor who knows the rendezvous ID but never scanned the QR cannot complete the handshake or forge a frame                                                  |
+| Sync configuration          | The desktop's real `config.json` arrives section-complete, with credentials redacted **before** they leave the desktop                                                                                            |
+| Sync conversations          | Index first, then full bodies on demand — compared byte for byte against the originals                                                                                                                            |
+| Run a live conversation     | A real agent turn streams back as deltas and tool events, reassembled exactly on the phone                                                                                                                        |
+| Reverse direction           | The phone serves the desktop: it advertises its own tools, the desktop invokes one, and the phone uploads files the desktop never had                                                                             |
+| Move files                  | Real workspace files plus deliberate edge cases: a zero-byte file, an Arabic (RTL) filename, and a payload one byte past the chunk boundary                                                                       |
+| Move the 248 MB PDF         | `miller.pdf` transfers while the phone is forcibly disconnected mid-flight, then resumes from its checkpoint and verifies sha256 end to end                                                                       |
+| Verify delivery             | Every file on both sides is hashed and compared; no partial files may remain                                                                                                                                      |
 
 ## What a run leaves behind
 

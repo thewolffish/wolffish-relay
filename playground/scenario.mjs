@@ -20,6 +20,7 @@ import { createDesktop, createMobile } from './lib/devices.mjs'
 import * as fixtures from './lib/fixtures.mjs'
 import { bytes, duration, speed } from './lib/log.mjs'
 import { CipherState, generateKeypair } from './lib/noise.mjs'
+import * as pairing from './lib/pairing.mjs'
 import { Disconnected, hashFile, Tunnel, Wiretap } from './lib/tunnel.mjs'
 
 const hex = (u8) => Buffer.from(u8).toString('hex')
@@ -119,6 +120,192 @@ export const phases = [
         `${ridDesktop.slice(0, 16)}…`
       )
       log.check(/^[0-9a-f]{64}$/.test(ridDesktop), 'rendezvous ID is 256-bit lowercase hex')
+    }
+  },
+
+  {
+    title: 'Pair by typed code',
+    detail: 'the other route in: no camera, no QR, same end state',
+    async run(ctx) {
+      const { log } = ctx
+
+      // Desktop shows a code instead of a QR. Eight Crockford characters —
+      // 40 bits, readable down a phone line.
+      const shown = pairing.generateCode()
+      const issuedAt = Date.now()
+      log.desktop(
+        `pairing code displayed: ${shown}  (expires in ${pairing.CODE_TTL_MS / 60000} min)`
+      )
+
+      // The phone's user types it, badly: lower case, no dash, and the classic
+      // look-alikes. Normalisation has to absorb all of it.
+      const typed = shown.replace('-', '').toLowerCase().replace(/0/g, 'o').replace(/1/g, 'l')
+      log.mobile(`typed: "${typed}"`)
+      log.check(
+        Buffer.compare(
+          Buffer.from(pairing.secretFromCode(typed)),
+          Buffer.from(pairing.secretFromCode(shown))
+        ) === 0,
+        'a sloppily typed code still derives the same secret',
+        'case, dashes and O/0 · I/L/1 folded'
+      )
+      log.check(pairing.codeIsLive(issuedAt, Date.now()), 'the code is still within its lifetime')
+
+      const rejected = ['ABC', 'TOO-SHORT-BY-FAR-XX', 'ABCD-EF!$'].filter((bad) => {
+        try {
+          pairing.normalizeCode(bad)
+          return false
+        } catch {
+          return true
+        }
+      })
+      log.check(rejected.length === 3, 'malformed codes are rejected before any connection is made')
+
+      const distinct = new Set(
+        Array.from({ length: 200 }, () =>
+          Buffer.from(pairing.secretFromCode(pairing.generateCode())).toString('hex')
+        )
+      )
+      log.check(distinct.size === 200, 'generated codes do not collide', '200 samples, 200 secrets')
+
+      const codeSecret = new Uint8Array(pairing.secretFromCode(typed))
+      const codeRid = rendezvousId(codeSecret)
+      log.check(
+        /^[0-9a-f]{64}$/.test(codeRid),
+        'the code derives a rendezvous ID',
+        `${codeRid.slice(0, 16)}…`
+      )
+
+      // A different code must lead somewhere else entirely.
+      const otherRid = rendezvousId(new Uint8Array(pairing.secretFromCode(pairing.generateCode())))
+      log.check(otherRid !== codeRid, 'a different code meets at a different rendezvous')
+
+      // Fresh identities: this pairing knows nothing in advance.
+      const deskKeys = generateKeypair()
+      const phoneKeys = generateKeypair()
+      const desk = new Tunnel({
+        role: 'host',
+        relayUrl: ctx.relayUrl,
+        rid: codeRid,
+        name: 'desktop',
+        log,
+        wiretap: ctx.wiretap,
+        lookup: ctx.lookup
+      })
+      const phone = new Tunnel({
+        role: 'guest',
+        relayUrl: ctx.relayUrl,
+        rid: codeRid,
+        name: 'mobile',
+        log,
+        wiretap: ctx.wiretap,
+        lookup: ctx.lookup
+      })
+      await desk.connect()
+      await phone.connect()
+      await Promise.all([desk.waitForPeer(), phone.waitForPeer()])
+
+      const started = Date.now()
+      const [deskSide, phoneSide] = await Promise.all([
+        desk.handshakeAsResponderCode({
+          staticKeypair: deskKeys,
+          psk: codeSecret,
+          payload: { device: 'wolffish-app', pairedBy: 'code' }
+        }),
+        phone.handshakeAsInitiatorCode({
+          staticKeypair: phoneKeys,
+          psk: codeSecret,
+          payload: { device: 'wolffish-mobile', pairedBy: 'code' }
+        })
+      ])
+      const ms = Date.now() - started
+      log.desktop(
+        `XXpsk3 handshake complete in ${ms} ms — neither side knew the other's key beforehand`
+      )
+
+      log.check(
+        deskSide.peerStaticKey === hex(phoneKeys.publicKey),
+        'desktop learned and pinned the phone key it was never told'
+      )
+      log.check(
+        phoneSide.peerStaticKey === hex(deskKeys.publicKey),
+        'phone learned and pinned the desktop key the code did not carry'
+      )
+      log.check(
+        desk.handshakeHash === phone.handshakeHash,
+        'both sides agree on the handshake transcript hash',
+        `${desk.handshakeHash.slice(0, 24)}…`
+      )
+      log.check(phoneSide.payload.pairedBy === 'code', 'identities exchanged inside the handshake')
+
+      // It has to be a working tunnel, not just a successful handshake.
+      desk.onRpc('system.check', async () => ({ ok: true, pairedBy: 'code' }))
+      phone.configureReceiver({
+        directory: ctx.dirs.mobileFiles,
+        partDirectory: ctx.dirs.parts
+      })
+      const health = await phone.rpc('system.check')
+      log.check(health.ok === true, 'RPC works over a code-paired tunnel')
+
+      const sample = ctx.fixtures.files.find((f) => f.size > 1000) ?? ctx.fixtures.files[0]
+      const sent = await desk.sendFile(path.join(ctx.dirs.desktopFiles, sample.name), {
+        name: `code-paired-${sample.name}`
+      })
+      log.check(sent.ok, `file delivered over a code-paired tunnel`, `${bytes(sample.size)}`)
+
+      // The whole point: after pairing, a code-paired device is indistinguishable
+      // from a QR-paired one — it reconnects with IKpsk2 against pinned keys.
+      desk.close(1000, 'code pairing done')
+      phone.close(1000, 'code pairing done')
+      await sleep(400)
+
+      const deskAgain = new Tunnel({
+        role: 'host',
+        relayUrl: ctx.relayUrl,
+        rid: codeRid,
+        name: 'desktop',
+        log,
+        wiretap: ctx.wiretap,
+        lookup: ctx.lookup
+      })
+      const phoneAgain = new Tunnel({
+        role: 'guest',
+        relayUrl: ctx.relayUrl,
+        rid: codeRid,
+        name: 'mobile',
+        log,
+        wiretap: ctx.wiretap,
+        lookup: ctx.lookup
+      })
+      await deskAgain.connect()
+      await phoneAgain.connect()
+      await Promise.all([deskAgain.waitForPeer(), phoneAgain.waitForPeer()])
+      const [reDesk] = await Promise.all([
+        deskAgain.handshakeAsResponder({
+          staticKeypair: deskKeys,
+          psk: codeSecret,
+          payload: { device: 'wolffish-app', resumed: true }
+        }),
+        phoneAgain.handshakeAsInitiator({
+          staticKeypair: phoneKeys,
+          // The key the phone pinned during code pairing — no QR ever existed.
+          remoteStaticPublicKey: new Uint8Array(Buffer.from(phoneSide.peerStaticKey, 'hex')),
+          psk: codeSecret,
+          payload: { device: 'wolffish-mobile', resumed: true }
+        })
+      ])
+      log.check(
+        reDesk.peerStaticKey === hex(phoneKeys.publicKey),
+        'code-paired devices reconnect with IKpsk2 against their pinned keys',
+        'identical to a QR pairing from here on'
+      )
+      deskAgain.onRpc('system.check', async () => ({ ok: true, reconnected: true }))
+      const after = await phoneAgain.rpc('system.check')
+      log.check(after.ok === true, 'the reconnected code-paired tunnel carries traffic')
+
+      deskAgain.close(1000, 'done')
+      phoneAgain.close(1000, 'done')
+      ctx.results.codePairing = { code: shown, handshakeMs: ms, bytes: sample.size }
     }
   },
 

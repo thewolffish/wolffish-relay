@@ -180,12 +180,15 @@ export function renderReference(run) {
 
 <p>The relay's whole job is to notice that two sockets presented the same rendezvous ID and to pass bytes between them. It performs no authentication of its own, keeps no accounts, and holds nothing once the sockets close. Everything that makes the tunnel <em>safe</em> happens on the devices, before a byte is handed over.</p>
 
-<h3>Pairing happens once, by QR</h3>
+<h3>Pairing happens once — by QR, or by a typed code</h3>
 <div class="split">
   <div>
     <p>The desktop displays a QR code carrying three things: the relay URL, its own long-lived public key, and a freshly generated 32-byte pairing secret. The phone's camera reads it.</p>
     <p>That camera hop matters more than it looks. Because the secret travels <strong>out of band</strong> — screen to lens, never over the network — a hostile relay cannot insert itself into the pairing. It never sees the secret, so it can never complete the handshake in the middle.</p>
     <p>From that secret both devices derive the same rendezvous ID: <code>rid = HMAC(secret, "rid-v1")</code>. It is 256 bits, unguessable, and the only fact about a pairing the relay ever learns. It identifies a meeting, not a person.</p>
+<p><strong>When a camera isn't an option</strong>, the same pairing works from a typed code — eight Crockford-base32 characters such as <code>GE3K-J7C4</code>, live for three minutes and good for one use. A desktop agent on a headless box or reached over SSH has no screen to show a QR at all.</p>
+<p>A code cannot carry a 64-character public key, so code pairing runs <strong>Noise XXpsk3</strong>: both static keys are exchanged inside the handshake and pinned there, and the code carries only the secret. It costs one extra message, paid once — from the next connection onward a code-paired device is indistinguishable from a QR-paired one, reconnecting with IKpsk2 against pinned keys.</p>
+<div class="note">Forty bits sounds small until you notice each guess costs a network round trip against a code that expires in minutes — which is why no PAKE is needed here. Decoding folds case, dashes and the <code>O</code>/<code>0</code>, <code>I</code>/<code>L</code>/<code>1</code> look-alikes, so reading a code aloud works. The QR stays the default: its secret travels screen-to-camera and cannot be screenshotted into a group chat.</div>
   </div>
   <div style="flex:0 0 auto">
     <img class="qr" src="${QR_ILLUSTRATION}" alt="Example pairing QR code" width="160" height="160" />

@@ -12,7 +12,7 @@ import { createReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import WebSocket from 'ws'
-import { Initiator, Responder } from './noise.mjs'
+import { Initiator, InitiatorXX, Responder, ResponderXX } from './noise.mjs'
 
 export const FrameType = {
   PING: 0x00,
@@ -202,8 +202,17 @@ export class Tunnel {
 
     if (kind !== RecordType.HANDSHAKE) return
     if (this.handshakeDone) {
-      this.log?.wire(`${this.name}: ignoring handshake record for an established session`)
-      return
+      // A handshake record on an established session means the peer has
+      // restarted — which is exactly what a returning device sends, often
+      // before this side has finished tearing the old session down. Drop the
+      // stale keys and accept it; ignoring it strands a peer that is waiting
+      // for our reply. The inbox and queue survive so a caller already
+      // waiting still receives this message.
+      this.handshakeDone = false
+      this.sendCipher = null
+      this.receiveCipher = null
+      this.log?.wire(`${this.name}: peer restarted the session`)
+      this.onPeerRestart?.()
     }
     // A returning peer can send its first handshake message before this side has
     // started listening; hold it rather than dropping it.
@@ -292,6 +301,52 @@ export class Tunnel {
     return {
       peerStaticKey: peerKey,
       payload: JSON.parse(decoder.decode(incoming.payload) || '{}')
+    }
+  }
+
+  /**
+   * Mobile side of a typed-code pairing: XXpsk3, three messages. Neither side
+   * needs the other's key beforehand — both are exchanged and pinned here.
+   */
+  async handshakeAsInitiatorCode({ staticKeypair, psk, payload }) {
+    const initiator = new InitiatorXX({ staticKeypair, psk })
+    const reply = this.#expectHandshakeMessage(20_000)
+    this.#sendCiphertext(
+      initiator.writeMessage1(encoder.encode(JSON.stringify(payload ?? {}))),
+      'xx msg1',
+      RecordType.HANDSHAKE
+    )
+    const incoming = initiator.readMessage2(await reply)
+    const out = initiator.writeMessage3(encoder.encode(JSON.stringify(payload ?? {})))
+    this.#sendCiphertext(out.message, 'xx msg3', RecordType.HANDSHAKE)
+    this.sendCipher = out.send
+    this.receiveCipher = out.receive
+    this.handshakeDone = true
+    this.handshakeHash = Buffer.from(out.handshakeHash).toString('hex')
+    return {
+      peerStaticKey: Buffer.from(incoming.remoteStaticPublicKey).toString('hex'),
+      payload: JSON.parse(decoder.decode(incoming.payload) || '{}')
+    }
+  }
+
+  /** Desktop side of a typed-code pairing. */
+  async handshakeAsResponderCode({ staticKeypair, psk, payload }) {
+    const responder = new ResponderXX({ staticKeypair, psk })
+    responder.readMessage1(await this.#expectHandshakeMessage(20_000))
+    const third = this.#expectHandshakeMessage(20_000)
+    this.#sendCiphertext(
+      responder.writeMessage2(encoder.encode(JSON.stringify(payload ?? {}))),
+      'xx msg2',
+      RecordType.HANDSHAKE
+    )
+    const result = responder.readMessage3(await third)
+    this.sendCipher = result.send
+    this.receiveCipher = result.receive
+    this.handshakeDone = true
+    this.handshakeHash = Buffer.from(result.handshakeHash).toString('hex')
+    return {
+      peerStaticKey: Buffer.from(result.remoteStaticPublicKey).toString('hex'),
+      payload: JSON.parse(decoder.decode(result.payload) || '{}')
     }
   }
 

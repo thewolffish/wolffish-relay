@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.14-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.15-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [RELAY.html](RELAY.html) in this repo.
@@ -58,7 +58,7 @@ This relay takes a different route: **both devices dial outward to the same addr
 
 Because both sides connect outward, the tunnel forms across any NAT with no port forwarding, no static IP, and no router configuration.
 
-### Pairing happens once, by QR
+### Pairing happens once — by QR, or by a typed code
 
 The desktop shows a QR code carrying three things: the relay URL, its long-lived public key, and a freshly generated 32-byte pairing secret. The phone's camera reads it.
 
@@ -71,6 +71,12 @@ rid = HMAC(pairing_secret, "rid-v1")      # 256 bits, lowercase hex
 ```
 
 It is unguessable, and it is the only fact about a pairing the relay ever learns. It identifies a meeting, not a person.
+
+**When a camera isn't an option**, the same pairing works from a typed code: eight Crockford-base32 characters like `GE3K-J7C4`, live for three minutes and good for one use. That matters more than it sounds — a desktop agent on a headless box or reached over SSH has no screen to show a QR at all.
+
+A code can't carry a 64-character public key, so code pairing runs **Noise XXpsk3** instead: both static keys are exchanged _inside_ the handshake and pinned there, and the code only has to carry the secret. It costs one extra message — three instead of two — paid once. From the next connection onward a code-paired device is indistinguishable from a QR-paired one; both reconnect with IKpsk2 against pinned keys.
+
+Forty bits sounds small until you notice each guess costs a network round trip against a code that expires in minutes, which is why no PAKE is needed. Decoding folds case, dashes and the `O`/`0`, `I`/`L`/`1` look-alikes, so reading a code down a phone line works. The QR remains the default: its secret travels screen-to-camera and can't be screenshotted into a group chat.
 
 ### Then a handshake, on every connection
 
