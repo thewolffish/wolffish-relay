@@ -9,10 +9,10 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.12-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.13-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
-> 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [report.html](report.html) in this repo.
+> 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [RELAY.html](RELAY.html) in this repo.
 
 ---
 
@@ -271,7 +271,7 @@ Two layers of proof ship with the repo.
 
 Every fixture comes from the published demo dataset on `cdn.wolffi.sh` — the same manifest, conversation shards, config snapshot and per-type sample files the mobile app downloads in demo mode. Nothing is read from a local workspace, so a clone of this repo produces an identical run on any machine.
 
-A full run is **55 checks** and regenerates [report.html](report.html). See [playground/README.md](playground/README.md) for the phase list and how to extend it.
+A full run is **55 checks** and regenerates [RELAY.html](RELAY.html). See [playground/README.md](playground/README.md) for the phase list and how to extend it.
 
 ## Run your own relay
 
@@ -358,7 +358,7 @@ That last command runs pairing, handshake, ciphertext audit, intrusion probes, b
 | `npm run playground`                    | Drive the whole tunnel end to end against the live relay      |
 | `npm run playground:quick`              | Same, without the 248 MB file (~1 min)                        |
 | `npm run playground:local`              | Drive `npm run dev` instead of production                     |
-| `npm run report`                        | Re-render `report.html` from the last run's data              |
+| `npm run report`                        | Re-render `RELAY.html` from the last run's data               |
 | `npm run typecheck` / `lint` / `format` | The usual guards                                              |
 | `npm run release`                       | Version bump + tag push -> CI deploys to Cloudflare           |
 

@@ -39,7 +39,7 @@ npm run playground:local    # drive `npm run dev` instead of production
 
 ## What a run leaves behind
 
-**[`../report.html`](../report.html)** — the committed reference document, regenerated with this run's real figures. It is the relay's public explainer: architecture, security model, retention guarantees, the example run, and the self-hosting guide. Edit its prose in `lib/report.mjs`, then `npm run report` to re-render without re-running the cycle.
+**[`../RELAY.html`](../RELAY.html)** — the committed reference document, regenerated with this run's real figures. It is the relay's public explainer: architecture, security model, retention guarantees, the example run, and the self-hosting guide. Edit its prose in `lib/report.mjs`, then `npm run report` to re-render without re-running the cycle.
 
 Everything else lands in `playground/out/` (gitignored):
 
@@ -54,11 +54,11 @@ out/
 │   ├── conversations/  full bodies, byte-identical to the desktop's
 │   ├── config.json
 │   └── live-turn.md    the streamed agent reply, reassembled
-├── run.json            machine-readable results (feeds report.html)
+├── run.json            machine-readable results (feeds RELAY.html)
 └── run.log             the full timeline
 ```
 
-Open [`../report.html`](../report.html) to see the run rather than read it —
+Open [`../RELAY.html`](../RELAY.html) to see the run rather than read it —
 including the desktop → relay → phone journey of the big PDF with its
 throughput, the hexdump of what the relay actually carried, and the sha256
 comparison table.
@@ -96,7 +96,7 @@ New RPC methods or events go in `lib/devices.mjs`; new fixtures in
 | `lib/tunnel.mjs`    | A tunnel endpoint: frames, RPC, events, the resumable file engine, and the wiretap                                             |
 | `lib/devices.mjs`   | How each side behaves — desktop serves, mobile receives                                                                        |
 | `lib/fixtures.mjs`  | Real data selection from `~/.wolffish`, the mobile demo set, and the CDN                                                       |
-| `lib/report.mjs`    | The reference document (`report.html`) plus the JSON and log output                                                            |
+| `lib/report.mjs`    | The reference document (`RELAY.html`) plus the JSON and log output                                                             |
 | `lib/diagrams.mjs`  | Inline SVG illustrations used by the document                                                                                  |
 | `render-report.mjs` | `npm run report` — re-render the document from the last run                                                                    |
 

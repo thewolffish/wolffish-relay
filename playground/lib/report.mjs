@@ -1,5 +1,5 @@
 /**
- * Renders `report.html` at the repo root — the committed reference document for
+ * Renders `RELAY.html` at the repo root — the committed reference document for
  * the relay: how it works, how it is built, what it promises about security and
  * retention, an example run against production, and a self-hosting guide.
  *
@@ -51,7 +51,7 @@ export async function writeReport({ log, ctx, outDir, repoRoot }) {
     log.lines.map((l) => `${(l.at / 1000).toFixed(2)}s [${l.actor}] ${l.message}`).join('\n')
   )
 
-  const file = path.join(repoRoot, 'report.html')
+  const file = path.join(repoRoot, 'RELAY.html')
   await fs.writeFile(file, renderReference(run))
   return file
 }

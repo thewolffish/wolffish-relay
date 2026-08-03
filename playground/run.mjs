@@ -10,7 +10,7 @@
  * Output (all gitignored) lands in playground/out:
  *   desktop/   what the desktop had — the source of truth for this run
  *   mobile/    what actually arrived over the tunnel
- *   report.html · run.json · run.log
+ *   RELAY.html (repo root) · run.json · run.log
  */
 import fs from 'node:fs/promises'
 import path from 'node:path'

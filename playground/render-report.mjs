@@ -22,9 +22,9 @@ try {
   process.exit(1)
 }
 
-const target = path.join(here, '..', 'report.html')
+const target = path.join(here, '..', 'RELAY.html')
 await fs.writeFile(target, renderReference(run))
 console.log(
-  `report.html rendered from the run of ${run.generatedAt ?? new Date(run.startedAt).toISOString()}`
+  `RELAY.html rendered from the run of ${run.generatedAt ?? new Date(run.startedAt).toISOString()}`
 )
 console.log(`  ${target}`)
