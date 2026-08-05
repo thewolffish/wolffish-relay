@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.15-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.16-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [RELAY.html](RELAY.html) in this repo.
@@ -23,6 +23,7 @@ The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare
 - [How it's built](#how-its-built)
 - [The wire contract](#the-wire-contract)
 - [Moving data and files](#moving-data-and-files)
+- [Push notifications](#push-notifications)
 - [Security promises](#security-promises)
 - [Zero data retention](#zero-data-retention)
 - [No logs, no telemetry](#no-logs-no-telemetry)
@@ -193,6 +194,59 @@ Each chunk is encrypted on its own, so a corrupted or reordered one fails loudly
 
 The sender holds a window, never the file, so memory stays flat whether the file is 3 MB or 300 GB. There is no protocol size limit — the practical bounds are disk space and patience.
 
+## Push notifications
+
+The one job the endpoints cannot do alone: reach a phone that is not connected. iOS suspends the app within seconds of backgrounding, so when the desktop agent finishes a run and wants to say so, there is often nobody on the other end of the tunnel. The relay is the only party that both knows whether the phone is live and can hold the routing state a platform push needs — so it carries a small, explicitly relay-readable **control plane** beside the sealed data plane.
+
+Notifications are **100% model-initiated**: the desktop sends a `notify` frame only when the agent calls its `notify_phone` tool. The harness adds no automatic triggers, and the model never supplies routing identity — the desktop stamps `notificationId` (a ULID) and `phoneId` from its own pairing record, treating all model output as untrusted input.
+
+### The control plane
+
+Binary records tagged `0x03` (`CONTROL_RECORD` in [`src/protocol.ts`](src/protocol.ts)) are plaintext JSON addressed to the relay — parsed and terminated here, never forwarded. Handshake (`0x01`) and transport (`0x02`) records remain opaque and are forwarded verbatim, exactly as before. An old relay forwards `0x03` records like any other binary frame and both apps silently drop record types they don't know, so version skew degrades to "no push", never to a broken tunnel.
+
+| Frame              | Direction       | Sender allowed      | Purpose                                                   |
+| ------------------ | --------------- | ------------------- | --------------------------------------------------------- |
+| `register_push`    | phone → relay   | `guest` socket only | Upsert the phone's Expo push token (or null) by `phoneId` |
+| `notify`           | desktop → relay | `host` socket only  | Ask for a notification to reach the paired phone          |
+| `notification`     | relay → phone   | —                   | In-band delivery of a notify                              |
+| `notification_ack` | phone → relay   | `guest` socket only | The in-band delivery arrived and was rendered             |
+| `notify_result`    | relay → desktop | —                   | Immediate answer: `inband`, `push`, or `dropped`          |
+
+Authorization is the rendezvous itself: joining the tunnel requires the 256-bit rid only the paired devices can derive, and each frame type is additionally bound to the role that may send it. A `notify` must also name a `phoneId` registered **on this pairing** — a mismatch is answered with a `dropped` result, never rerouted.
+
+### Delivery decision tree
+
+For each valid `notify`, in order:
+
+```
+1. notificationId already processed?  -> replay the stored result (idempotent), send nothing
+2. phoneId not registered here?      -> notify_result: dropped ("not registered on this pairing")
+3. phone socket live?                -> deliver in-band, answer `inband`,
+                                        then wait 2 s for the phone's notification_ack;
+                                        no ack + token known -> Expo push in the background
+                                        (the phone dedupes by notificationId, so the user
+                                        can never see the same notification twice)
+4. no live phone, token known?       -> answer `push`, send via Expo in the background
+5. no live phone, no token?          -> notify_result: dropped ("no push token")
+```
+
+The desktop's answer never waits on Expo — pushes run in `waitUntil` after the `notify_result` is on the wire. Expo sends go straight to `exp.host` with plain `fetch` (no SDK), batched at most 100 per request, authenticated with the `EXPO_ACCESS_TOKEN` Worker secret (the Expo project has Enhanced Security for Push Notifications enabled, so an unauthenticated send fails — loudly, in the logs). Fifteen minutes after any push send, a Durable Object alarm sweeps the stored ticket ids through `getReceipts`: a `DeviceNotRegistered` receipt deletes that phone's registration (the token is dead — uninstall or rotation), and an `InvalidCredentials` receipt is logged distinctly because it is the only signal that the FCM/APNs credentials themselves are broken.
+
+### The lifetime of each identifier
+
+| Identifier      | Scope              | Lives                                                                                                                                                          |
+| --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phoneId`       | one physical phone | Permanent — minted once on the phone, survives re-pairing and reconnects                                                                                       |
+| rendezvous ID   | one pairing        | Until re-pairing — derived from the pairing secret, stable across reconnects; this is the Durable Object's name, which is why registrations survive reconnects |
+| session         | one connection     | Until the socket drops — fresh Noise handshake and keys every connect                                                                                          |
+| Expo push token | one app install    | Until reinstall or platform rotation — the phone re-registers on every foreground, and the receipt sweep prunes dead ones                                      |
+
+### What this changes about retention
+
+The data plane is untouched: conversation content still crosses the relay only as ciphertext, unparsed and unstored. The control plane deliberately retains three small things in Durable Object storage, keyed under distinct prefixes: `device:<phoneId>` (push token, platform, app version), `ticket:<notificationId>` (Expo ticket ids awaiting receipts), and `notif:<notificationId>` (processed ids for idempotency, pruned after 24 h). Notification **titles and bodies are never stored** — they pass through to Expo's push service only when the push fallback actually fires, which is inherent to any platform push: Apple and Google deliver the banner, so they see its text. Keep that in mind when wording notifications; conversation content never rides this path. Push tokens are logged only as a short prefix.
+
+Self-hosting note: the control plane needs an `EXPO_ACCESS_TOKEN` secret (locally: `.dev.vars`, gitignored) for the push fallback. Without one, in-band delivery still works and pushes fail loudly in the logs.
+
 ## Security promises
 
 The relay is **untrusted by design**. Every guarantee below holds even if the relay is fully compromised, operated by someone else, or replaced by a hostile clone.
@@ -220,13 +274,14 @@ It **cannot** read content, alter it undetected, replay it, forge a frame either
 
 "We don't store your data" is a promise. Here is the version you can check — every piece of state in the system and where it lives.
 
-| State                                            | Where it lives                                 | Lifetime                                         |
-| ------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------ |
-| Device keypairs, peer public key, pairing secret | Platform secure storage — see the caveat below | Until you unpair                                 |
-| Conversations, configs, files, sync cursors      | Each app's own local database                  | The product's own data — endpoints, not the pipe |
-| Session keys                                     | Both devices' RAM                              | One connection                                   |
-| The socket pair and a role tag                   | Relay RAM                                      | Dies with the sockets                            |
-| Any database, object store, queue or log         | **Does not exist**                             | —                                                |
+| State                                                                             | Where it lives                                                         | Lifetime                                                            |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Device keypairs, peer public key, pairing secret                                  | Platform secure storage — see the caveat below                         | Until you unpair                                                    |
+| Conversations, configs, files, sync cursors                                       | Each app's own local database                                          | The product's own data — endpoints, not the pipe                    |
+| Session keys                                                                      | Both devices' RAM                                                      | One connection                                                      |
+| The socket pair and a role tag                                                    | Relay RAM                                                              | Dies with the sockets                                               |
+| Push routing state: token by phoneId, Expo ticket ids, processed notification ids | Durable Object storage — see [Push notifications](#push-notifications) | Token until re-registered or pruned dead; tickets ~15 min; ids 24 h |
+| Message content in any database, object store, queue or log                       | **Does not exist**                                                     | —                                                                   |
 
 Unpairing means deleting the stored key material on each device. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.
 

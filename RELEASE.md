@@ -9,7 +9,7 @@ Instructions for cutting a release. Same shape as the wolffish-app procedure: ve
 - **Never hand-edit the version** in `package.json` / `package-lock.json`. `npm run release` bumps them (`npm version patch`). The only version you touch by hand is the **README badge**.
 - **Stay on `main`.** No branches. The release is committed and pushed on `main`.
 - **`npm run release` is the last step and it is outward-facing** — it pushes a commit and a tag, which triggers the Release workflow: tests → **deploy to Cloudflare** → GitHub Release. Only run it once everything is clean. A tag push deploys production infrastructure.
-- **ZDR invariants are release blockers.** If the diff adds any storage binding, storage API call, logging, analytics, or external fetch to the relay, that is not a lint problem — stop and report it.
+- **Retention invariants are release blockers.** The DATA PLANE stays opaque and unretained: if the diff parses, stores, or logs handshake/transport record content, adds a storage binding beyond the DO, adds analytics, or adds an external fetch anywhere except the push control plane's Expo client (`src/push.ts` → exp.host), that is not a lint problem — stop and report it. The push control plane (AGENTS.md invariants 2–3) is the one audited exception: `device:`/`ticket:`/`notif:` records, prefix-only token logging, never notification bodies.
 - **When in doubt, stop.** A halted release costs nothing. A bad release is live at `relay.wolffi.sh`.
 
 ## What `npm run release` actually does

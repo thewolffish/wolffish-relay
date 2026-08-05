@@ -45,6 +45,13 @@ export default {
       return new Response('expected websocket upgrade', { status: 426 })
     }
 
+    // DO identity: idFromName over the rendezvous ID, which is derived from
+    // the PAIRING SECRET (rid = HMAC(pairing_secret, "rid-v1")) — a stable
+    // per-pairing name, not a per-connection one. Every reconnect of either
+    // device re-derives the same rid, so state the DO keeps for the pairing
+    // (push registrations) survives reconnects. Only re-pairing rotates it,
+    // and the phone re-registers right after pairing. Never key this by
+    // newUniqueId() or any per-session value.
     return env.TUNNEL.get(env.TUNNEL.idFromName(match[1])).fetch(request)
   }
 } satisfies ExportedHandler<Env>
