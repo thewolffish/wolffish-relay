@@ -17,6 +17,7 @@ import {
   parseNotify,
   parseRegisterPush,
   parseSetBadge,
+  parseUnregisterPush,
   peerOf,
   tokenPrefix,
   type NotificationFrame,
@@ -97,6 +98,9 @@ const MIN_ALARM_GAP_MS = 60_000
  * survive reconnects for the life of the pairing. Re-pairing mints a new
  * secret (hence a new rid and a fresh DO), and the phone re-registers its
  * push token immediately after pairing, so registrations follow the pairing.
+ * The pairing's END is explicit too: a phone that unpairs sends
+ * `unregister_push` before dropping, so a severed device stops being
+ * pushable the moment it leaves rather than lingering until its token dies.
  *
  * Retention, stated precisely:
  * - The DATA PLANE is untouched: handshake (0x01) and transport (0x02)
@@ -224,6 +228,8 @@ export class Tunnel implements DurableObject {
         return this.onNotificationAck(attachment, raw)
       case 'set_badge':
         return this.onSetBadge(ws, attachment, raw)
+      case 'unregister_push':
+        return this.onUnregisterPush(ws, attachment, raw)
       default:
         // Forward compatibility: a newer client may speak control types this
         // relay predates. Ignoring them is the contract.
@@ -433,6 +439,41 @@ export class Tunnel implements DurableObject {
     if ((device.badge ?? 0) === frame.count) return
     device.badge = frame.count
     await this.ctx.storage.put(key, device)
+  }
+
+  /**
+   * The phone is unpairing: forget the device — token, platform, badge. A
+   * registration left behind would keep routing pushes (badge counts and all)
+   * at a phone that wiped its copy of everything they describe; deleted, every
+   * later notify for this phoneId answers `dropped`, which is the honest
+   * result. Same authorization story as register_push and set_badge. The
+   * delete is idempotent — a repeat, or an id that never registered, is a
+   * quiet no-op, because the state the frame asks for already holds.
+   */
+  private async onUnregisterPush(
+    ws: WebSocket,
+    attachment: Attachment,
+    raw: Record<string, unknown>
+  ): Promise<void> {
+    if (attachment.role !== 'guest') {
+      console.warn('[push] unregister_push from a non-phone socket rejected')
+      return
+    }
+    const parsed = parseUnregisterPush(raw)
+    if ('error' in parsed) {
+      console.warn(`[push] unregister_push rejected: ${parsed.error}`)
+      return
+    }
+    const frame = parsed.frame
+    if (attachment.phoneId && attachment.phoneId !== frame.phoneId) {
+      console.warn('[push] unregister_push with a different phoneId on a bound socket rejected')
+      return
+    }
+    if (!attachment.phoneId) {
+      ws.serializeAttachment({ ...attachment, phoneId: frame.phoneId } satisfies Attachment)
+    }
+    const deleted = await this.ctx.storage.delete(`${DEVICE_PREFIX}${frame.phoneId}`)
+    if (deleted) console.log(`[push] device unregistered: ${frame.phoneId}`)
   }
 
   /** The in-band ack window: give the phone a moment, then push anyway. */

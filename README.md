@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.17-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.18-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [RELAY.html](RELAY.html) in this repo.
@@ -212,8 +212,11 @@ Binary records tagged `0x03` (`CONTROL_RECORD` in [`src/protocol.ts`](src/protoc
 | `notification_ack` | phone → relay   | `guest` socket only | The in-band delivery arrived and was rendered             |
 | `notify_result`    | relay → desktop | —                   | Immediate answer: `inband`, `push`, or `dropped`          |
 | `set_badge`        | phone → relay   | `guest` socket only | Reconcile the phone's unread badge count (absolute)       |
+| `unregister_push`  | phone → relay   | `guest` socket only | Forget the device on unpairing — token, platform, badge   |
 
 The relay also keeps one integer per device: an unread badge count, incremented on every delivered notify and stamped as `badge` onto the Expo push so the app icon shows the number while the app is dead. The phone owns the real (per-conversation) unread state and overwrites the integer with an absolute `set_badge` whenever its local count changes — absolute, not a delta, so a lost frame can never make the number drift.
+
+A phone-initiated unpair ends the registration explicitly: the phone sends `unregister_push` while its socket is still up, the relay deletes the device record (token, platform, badge and all), and every later `notify` for that `phoneId` answers `dropped` — honest, instead of pushing at a device that wiped its copy of everything the notification describes. The delete is idempotent, and re-pairing simply registers afresh.
 
 Authorization is the rendezvous itself: joining the tunnel requires the 256-bit rid only the paired devices can derive, and each frame type is additionally bound to the role that may send it. A `notify` must also name a `phoneId` registered **on this pairing** — a mismatch is answered with a `dropped` result, never rerouted.
 
@@ -237,12 +240,12 @@ The desktop's answer never waits on Expo — pushes run in `waitUntil` after the
 
 ### The lifetime of each identifier
 
-| Identifier      | Scope              | Lives                                                                                                                                                          |
-| --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `phoneId`       | one physical phone | Permanent — minted once on the phone, survives re-pairing and reconnects                                                                                       |
-| rendezvous ID   | one pairing        | Until re-pairing — derived from the pairing secret, stable across reconnects; this is the Durable Object's name, which is why registrations survive reconnects |
-| session         | one connection     | Until the socket drops — fresh Noise handshake and keys every connect                                                                                          |
-| Expo push token | one app install    | Until reinstall or platform rotation — the phone re-registers on every foreground, and the receipt sweep prunes dead ones                                      |
+| Identifier      | Scope              | Lives                                                                                                                                                                         |
+| --------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phoneId`       | one physical phone | Permanent — minted once on the phone, survives re-pairing and reconnects                                                                                                      |
+| rendezvous ID   | one pairing        | Until re-pairing — derived from the pairing secret, stable across reconnects; this is the Durable Object's name, which is why registrations survive reconnects                |
+| session         | one connection     | Until the socket drops — fresh Noise handshake and keys every connect                                                                                                         |
+| Expo push token | one app install    | Until reinstall, platform rotation, or unpairing — the phone re-registers on every foreground, `unregister_push` deletes it on unpair, and the receipt sweep prunes dead ones |
 
 ### What this changes about retention
 
@@ -277,14 +280,14 @@ It **cannot** read content, alter it undetected, replay it, forge a frame either
 
 "We don't store your data" is a promise. Here is the version you can check — every piece of state in the system and where it lives.
 
-| State                                                                             | Where it lives                                                         | Lifetime                                                            |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Device keypairs, peer public key, pairing secret                                  | Platform secure storage — see the caveat below                         | Until you unpair                                                    |
-| Conversations, configs, files, sync cursors                                       | Each app's own local database                                          | The product's own data — endpoints, not the pipe                    |
-| Session keys                                                                      | Both devices' RAM                                                      | One connection                                                      |
-| The socket pair and a role tag                                                    | Relay RAM                                                              | Dies with the sockets                                               |
+| State                                                                                                    | Where it lives                                                         | Lifetime                                                            |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Device keypairs, peer public key, pairing secret                                                         | Platform secure storage — see the caveat below                         | Until you unpair                                                    |
+| Conversations, configs, files, sync cursors                                                              | Each app's own local database                                          | The product's own data — endpoints, not the pipe                    |
+| Session keys                                                                                             | Both devices' RAM                                                      | One connection                                                      |
+| The socket pair and a role tag                                                                           | Relay RAM                                                              | Dies with the sockets                                               |
 | Push routing state: token and unread badge count by phoneId, Expo ticket ids, processed notification ids | Durable Object storage — see [Push notifications](#push-notifications) | Token until re-registered or pruned dead; tickets ~15 min; ids 24 h |
-| Message content in any database, object store, queue or log                       | **Does not exist**                                                     | —                                                                   |
+| Message content in any database, object store, queue or log                                              | **Does not exist**                                                     | —                                                                   |
 
 Unpairing means deleting the stored key material on each device. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.
 

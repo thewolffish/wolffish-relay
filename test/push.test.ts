@@ -563,6 +563,83 @@ describe('badge counting', () => {
   })
 })
 
+describe('push unregistration', () => {
+  it('deletes the registration so later notifies drop honestly, and repeats are quiet no-ops', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    sendControl(guest, { v: 1, type: 'unregister_push', phoneId: PHONE_ID })
+    await until(
+      async () => (await readStorage(rid, `device:${PHONE_ID}`)) === undefined,
+      2000,
+      'registration deleted'
+    )
+
+    // Unregistering again asks for a state that already holds — nothing
+    // breaks, and the socket stays healthy for data-plane traffic.
+    sendControl(guest, { v: 1, type: 'unregister_push', phoneId: PHONE_ID })
+    expect(await guest.silentFor(150)).toBe(true)
+
+    // The device is gone, so a notify cannot claim success: no reroute to
+    // the live guest socket, no Expo push, an honest `dropped` result.
+    sendControl(host, notifyFrame())
+    const result = await nextControl(host)
+    expect(result.route).toBe('dropped')
+    expect(String(result.reason)).toContain('not registered')
+    expect(await guest.silentFor(200)).toBe(true)
+    expect(expoCalls.length).toBe(0)
+  })
+
+  it('ignores unregister_push from the desktop socket', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    sendControl(host, { v: 1, type: 'unregister_push', phoneId: PHONE_ID })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(await readStorage(rid, `device:${PHONE_ID}`)).toBeDefined()
+  })
+
+  it('refuses unregister for a different phoneId on a bound socket, and drops malformed frames', async () => {
+    const rid = freshRid()
+    const { guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    // Bound to PHONE_ID by its registration, this socket cannot unregister
+    // anyone else…
+    sendControl(guest, { v: 1, type: 'unregister_push', phoneId: 'phone-other-9999999' })
+    // …and a frame that fails validation is dropped before it can act.
+    sendControl(guest, { v: 1, type: 'unregister_push', phoneId: 'x' })
+    sendControl(guest, { v: 2, type: 'unregister_push', phoneId: PHONE_ID })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(await readStorage(rid, `device:${PHONE_ID}`)).toBeDefined()
+  })
+
+  it('a fresh registration after unregister starts its badge at zero', async () => {
+    // Run up a badge count the usual way: registered phone, offline, pushed.
+    const { rid, host } = await withOfflinePhone(TOKEN)
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(async () => (await readBadge(rid)) === 1, 2000, 'badge counted')
+
+    // The phone returns to unpair: unregister wipes the record, badge included
+    // — unlike re-registration, which deliberately preserves the count.
+    const guest = await connect(rid, 'guest')
+    expect(await host.next()).toBe('{"t":"peer-present"}')
+    expect(await guest.next()).toBe('{"t":"peer-present"}')
+    sendControl(guest, { v: 1, type: 'unregister_push', phoneId: PHONE_ID })
+    await until(
+      async () => (await readStorage(rid, `device:${PHONE_ID}`)) === undefined,
+      2000,
+      'registration deleted'
+    )
+
+    await registerPhone(rid, guest, TOKEN)
+    expect(await readBadge(rid)).toBe(0)
+  })
+})
+
 describe('receipt sweep', () => {
   /** Push once, then age the stored ticket so the sweep sees it as due. */
   async function agedTicket(rid: string, host: Client): Promise<string> {

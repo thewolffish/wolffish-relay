@@ -197,6 +197,20 @@ export type SetBadgeFrame = {
   count: number
 }
 
+/**
+ * Phone → relay, on unpairing: forget this device entirely — token, platform,
+ * badge count. The phone is severing the pairing and wiping its local copy;
+ * a registration left behind would keep routing pushes (and stamping badge
+ * counts) at a device that no longer holds anything they describe. After the
+ * delete, a notify for this phoneId answers `dropped` — the honest result —
+ * and re-pairing re-registers from scratch.
+ */
+export type UnregisterPushFrame = {
+  v: 1
+  type: 'unregister_push'
+  phoneId: string
+}
+
 /** Relay → desktop: how the notify was routed, answered immediately. */
 export type NotifyResultFrame = {
   v: 1
@@ -367,6 +381,14 @@ export function parseSetBadge(raw: Record<string, unknown>): ParseResult<SetBadg
   }
   const count = Math.min(BADGE_COUNT_MAX, Math.max(0, Math.round(raw.count)))
   return { frame: { v: 1, type: 'set_badge', phoneId: raw.phoneId, count } }
+}
+
+export function parseUnregisterPush(
+  raw: Record<string, unknown>
+): ParseResult<UnregisterPushFrame> {
+  if (raw.v !== PUSH_WIRE_VERSION) return { error: `unsupported version ${String(raw.v)}` }
+  if (!isValidPhoneId(raw.phoneId)) return { error: 'invalid phoneId' }
+  return { frame: { v: 1, type: 'unregister_push', phoneId: raw.phoneId } }
 }
 
 /** Log-safe form of a push token: enough prefix to correlate, never the key. */
