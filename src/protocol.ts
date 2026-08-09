@@ -118,6 +118,10 @@ export const NOTIFY_BODY_MAX = 180
 export const NOTIFY_TTL_MIN = 60
 export const NOTIFY_TTL_MAX = 86_400
 
+/** Ceiling for the per-device unread badge count. Purely a sanity clamp —
+ *  no OS renders a bigger number meaningfully. */
+export const BADGE_COUNT_MAX = 999
+
 /** How long an in-band delivery waits for the phone's ack before the relay
  *  falls back to Expo push. Overridable per-env for tests only. */
 export const NOTIFY_ACK_TIMEOUT_MS = 2_000
@@ -177,6 +181,21 @@ export type NotificationFrame = Omit<NotifyFrame, 'type'> & { type: 'notificatio
 
 /** Phone → relay: the in-band delivery arrived and was rendered. */
 export type NotificationAckFrame = { v: 1; type: 'notification_ack'; notificationId: string }
+
+/**
+ * Phone → relay: the phone's current unread notification count, absolute.
+ * The relay keeps one integer per device so the Expo push fallback can stamp
+ * an accurate `badge` onto OS notifications while the app is dead; the phone
+ * owns the real per-conversation state and overwrites this number whenever it
+ * changes locally (conversation opened, notification seen). Absolute rather
+ * than a delta so a lost or reordered frame can never make the count drift.
+ */
+export type SetBadgeFrame = {
+  v: 1
+  type: 'set_badge'
+  phoneId: string
+  count: number
+}
 
 /** Relay → desktop: how the notify was routed, answered immediately. */
 export type NotifyResultFrame = {
@@ -336,6 +355,18 @@ export function parseNotificationAck(
   if (raw.v !== PUSH_WIRE_VERSION) return { error: `unsupported version ${String(raw.v)}` }
   if (!isValidNotificationId(raw.notificationId)) return { error: 'invalid notificationId' }
   return { frame: { v: 1, type: 'notification_ack', notificationId: raw.notificationId } }
+}
+
+/** Validate a set_badge frame. Like ttl, the count is a number the relay
+ *  clamps into range rather than rejects — it is a rendering hint, not data. */
+export function parseSetBadge(raw: Record<string, unknown>): ParseResult<SetBadgeFrame> {
+  if (raw.v !== PUSH_WIRE_VERSION) return { error: `unsupported version ${String(raw.v)}` }
+  if (!isValidPhoneId(raw.phoneId)) return { error: 'invalid phoneId' }
+  if (typeof raw.count !== 'number' || !Number.isFinite(raw.count)) {
+    return { error: 'invalid count' }
+  }
+  const count = Math.min(BADGE_COUNT_MAX, Math.max(0, Math.round(raw.count)))
+  return { frame: { v: 1, type: 'set_badge', phoneId: raw.phoneId, count } }
 }
 
 /** Log-safe form of a push token: enough prefix to correlate, never the key. */

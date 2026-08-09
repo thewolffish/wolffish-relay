@@ -211,6 +211,9 @@ Binary records tagged `0x03` (`CONTROL_RECORD` in [`src/protocol.ts`](src/protoc
 | `notification`     | relay → phone   | —                   | In-band delivery of a notify                              |
 | `notification_ack` | phone → relay   | `guest` socket only | The in-band delivery arrived and was rendered             |
 | `notify_result`    | relay → desktop | —                   | Immediate answer: `inband`, `push`, or `dropped`          |
+| `set_badge`        | phone → relay   | `guest` socket only | Reconcile the phone's unread badge count (absolute)       |
+
+The relay also keeps one integer per device: an unread badge count, incremented on every delivered notify and stamped as `badge` onto the Expo push so the app icon shows the number while the app is dead. The phone owns the real (per-conversation) unread state and overwrites the integer with an absolute `set_badge` whenever its local count changes — absolute, not a delta, so a lost frame can never make the number drift.
 
 Authorization is the rendezvous itself: joining the tunnel requires the 256-bit rid only the paired devices can derive, and each frame type is additionally bound to the role that may send it. A `notify` must also name a `phoneId` registered **on this pairing** — a mismatch is answered with a `dropped` result, never rerouted.
 
@@ -243,7 +246,7 @@ The desktop's answer never waits on Expo — pushes run in `waitUntil` after the
 
 ### What this changes about retention
 
-The data plane is untouched: conversation content still crosses the relay only as ciphertext, unparsed and unstored. The control plane deliberately retains three small things in Durable Object storage, keyed under distinct prefixes: `device:<phoneId>` (push token, platform, app version), `ticket:<notificationId>` (Expo ticket ids awaiting receipts), and `notif:<notificationId>` (processed ids for idempotency, pruned after 24 h). Notification **titles and bodies are never stored** — they pass through to Expo's push service only when the push fallback actually fires, which is inherent to any platform push: Apple and Google deliver the banner, so they see its text. Keep that in mind when wording notifications; conversation content never rides this path. Push tokens are logged only as a short prefix.
+The data plane is untouched: conversation content still crosses the relay only as ciphertext, unparsed and unstored. The control plane deliberately retains three small things in Durable Object storage, keyed under distinct prefixes: `device:<phoneId>` (push token, platform, app version, unread badge count), `ticket:<notificationId>` (Expo ticket ids awaiting receipts), and `notif:<notificationId>` (processed ids for idempotency, pruned after 24 h). Notification **titles and bodies are never stored** — they pass through to Expo's push service only when the push fallback actually fires, which is inherent to any platform push: Apple and Google deliver the banner, so they see its text. Keep that in mind when wording notifications; conversation content never rides this path. Push tokens are logged only as a short prefix.
 
 Self-hosting note: the control plane needs an `EXPO_ACCESS_TOKEN` secret (locally: `.dev.vars`, gitignored) for the push fallback. Without one, in-band delivery still works and pushes fail loudly in the logs.
 
@@ -280,7 +283,7 @@ It **cannot** read content, alter it undetected, replay it, forge a frame either
 | Conversations, configs, files, sync cursors                                       | Each app's own local database                                          | The product's own data — endpoints, not the pipe                    |
 | Session keys                                                                      | Both devices' RAM                                                      | One connection                                                      |
 | The socket pair and a role tag                                                    | Relay RAM                                                              | Dies with the sockets                                               |
-| Push routing state: token by phoneId, Expo ticket ids, processed notification ids | Durable Object storage — see [Push notifications](#push-notifications) | Token until re-registered or pruned dead; tickets ~15 min; ids 24 h |
+| Push routing state: token and unread badge count by phoneId, Expo ticket ids, processed notification ids | Durable Object storage — see [Push notifications](#push-notifications) | Token until re-registered or pruned dead; tickets ~15 min; ids 24 h |
 | Message content in any database, object store, queue or log                       | **Does not exist**                                                     | —                                                                   |
 
 Unpairing means deleting the stored key material on each device. There is nothing in the cloud to delete because nothing was ever written there — which is also why reconnection is free: there is no server-side session to restore, ever.

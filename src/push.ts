@@ -26,6 +26,9 @@ export type ExpoPushMessage = {
   /** Seconds. */
   ttl: number
   channelId: string
+  /** App-icon unread count. Applied by iOS at delivery; Android launchers
+   *  that support numeric badges pick it up from the notification instead. */
+  badge?: number
 }
 
 export type ExpoTicket =

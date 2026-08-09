@@ -170,6 +170,21 @@ function notifyFrame(overrides: Partial<NotifyFrame> = {}): Record<string, unkno
   }
 }
 
+/** Registered phone that then went away — the pure Expo push path. */
+async function withOfflinePhone(token: string | null): Promise<{ rid: string; host: Client }> {
+  const rid = freshRid()
+  const { host, guest } = await pairUp(rid)
+  await registerPhone(rid, guest, token)
+  guest.ws.close(1000, 'backgrounded')
+  expect(await host.next()).toBe('{"t":"peer-gone"}')
+  return { rid, host }
+}
+
+async function readBadge(rid: string): Promise<number | undefined> {
+  const device = await readStorage<{ badge?: number }>(rid, `device:${PHONE_ID}`)
+  return device?.badge
+}
+
 // ----------------------------------------------------------------- tests
 
 describe('push registration', () => {
@@ -403,15 +418,6 @@ describe('in-band delivery', () => {
 })
 
 describe('push fallback with no live phone', () => {
-  async function withOfflinePhone(token: string | null): Promise<{ rid: string; host: Client }> {
-    const rid = freshRid()
-    const { host, guest } = await pairUp(rid)
-    await registerPhone(rid, guest, token)
-    guest.ws.close(1000, 'backgrounded')
-    expect(await host.next()).toBe('{"t":"peer-gone"}')
-    return { rid, host }
-  }
-
   it('routes straight to Expo push and answers the desktop immediately', async () => {
     const { rid, host } = await withOfflinePhone(TOKEN)
     const frame = notifyFrame()
@@ -435,6 +441,125 @@ describe('push fallback with no live phone', () => {
     expect(String(result.reason)).toContain('no push token')
     await new Promise((resolve) => setTimeout(resolve, 200))
     expect(expoCalls.length).toBe(0)
+  })
+})
+
+describe('badge counting', () => {
+  it('stamps an incrementing badge onto Expo pushes', async () => {
+    const { rid, host } = await withOfflinePhone(TOKEN)
+
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(() => expoCalls.length === 1, 3000, 'first expo send')
+    expect((expoCalls[0].body as Record<string, unknown>[])[0].badge).toBe(1)
+
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(() => expoCalls.length === 2, 3000, 'second expo send')
+    expect((expoCalls[1].body as Record<string, unknown>[])[0].badge).toBe(2)
+
+    expect(await readBadge(rid)).toBe(2)
+  })
+
+  it('counts an in-band delivery once, and its push fallback carries that same count', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('inband')
+    await nextControl(guest) // delivered — but the phone never acks
+
+    // The fallback push fires with the count of the SAME notification: the
+    // in-band try and its fallback are one notification, counted once.
+    await until(() => expoCalls.length === 1, 3000, 'expo fallback send')
+    expect((expoCalls[0].body as Record<string, unknown>[])[0].badge).toBe(1)
+    expect(await readBadge(rid)).toBe(1)
+  })
+
+  it('does not count a notify that was dropped undeliverable', async () => {
+    const { rid, host } = await withOfflinePhone(null)
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('dropped')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(await readBadge(rid)).toBe(0)
+  })
+
+  it('set_badge reconciles the stored count absolutely', async () => {
+    const { rid, host } = await withOfflinePhone(TOKEN)
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(async () => (await readBadge(rid)) === 2, 2000, 'badge reached 2')
+
+    // The phone comes back, reads its notifications, and reconciles to 0.
+    const guest = await connect(rid, 'guest')
+    expect(await host.next()).toBe('{"t":"peer-present"}')
+    expect(await guest.next()).toBe('{"t":"peer-present"}')
+    sendControl(guest, { v: 1, type: 'set_badge', phoneId: PHONE_ID, count: 0 })
+    await until(async () => (await readBadge(rid)) === 0, 2000, 'badge reconciled to 0')
+
+    // The next push starts counting from the reconciled base.
+    guest.ws.close(1000, 'backgrounded')
+    expect(await host.next()).toBe('{"t":"peer-gone"}')
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(() => expoCalls.length === 3, 3000, 'expo send after reconcile')
+    expect((expoCalls[2].body as Record<string, unknown>[])[0].badge).toBe(1)
+  })
+
+  it('clamps set_badge counts into range and drops malformed ones', async () => {
+    const rid = freshRid()
+    const { guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    sendControl(guest, { v: 1, type: 'set_badge', phoneId: PHONE_ID, count: 5000 })
+    await until(async () => (await readBadge(rid)) === 999, 2000, 'clamped to ceiling')
+
+    sendControl(guest, { v: 1, type: 'set_badge', phoneId: PHONE_ID, count: -3 })
+    await until(async () => (await readBadge(rid)) === 0, 2000, 'clamped to floor')
+
+    sendControl(guest, { v: 1, type: 'set_badge', phoneId: PHONE_ID, count: 'many' })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(await readBadge(rid)).toBe(0)
+  })
+
+  it('ignores set_badge from the desktop socket', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    sendControl(host, { v: 1, type: 'set_badge', phoneId: PHONE_ID, count: 42 })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(await readBadge(rid)).toBe(0)
+  })
+
+  it('re-registration refreshes the token but never the badge', async () => {
+    const { rid, host } = await withOfflinePhone(TOKEN)
+    sendControl(host, notifyFrame())
+    expect((await nextControl(host)).route).toBe('push')
+    await until(async () => (await readBadge(rid)) === 1, 2000, 'badge counted')
+
+    const guest = await connect(rid, 'guest')
+    expect(await host.next()).toBe('{"t":"peer-present"}')
+    expect(await guest.next()).toBe('{"t":"peer-present"}')
+    sendControl(guest, {
+      v: 1,
+      type: 'register_push',
+      phoneId: PHONE_ID,
+      expoPushToken: TOKEN,
+      platform: 'ios',
+      appVersion: '2.0.0'
+    })
+    await until(
+      async () =>
+        (await readStorage<{ appVersion: string | null }>(rid, `device:${PHONE_ID}`))
+          ?.appVersion === '2.0.0',
+      2000,
+      're-registration landed'
+    )
+    expect(await readBadge(rid)).toBe(1)
   })
 })
 

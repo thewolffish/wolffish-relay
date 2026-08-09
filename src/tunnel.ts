@@ -1,5 +1,6 @@
 import {
   ANDROID_CHANNEL_ID,
+  BADGE_COUNT_MAX,
   CONTROL_RECORD,
   CloseCode,
   KEEPALIVE,
@@ -15,6 +16,7 @@ import {
   parseNotificationAck,
   parseNotify,
   parseRegisterPush,
+  parseSetBadge,
   peerOf,
   tokenPrefix,
   type NotificationFrame,
@@ -48,6 +50,14 @@ interface DeviceRecord {
   platform: PushPlatform
   appVersion: string | null
   updatedAt: number
+  /**
+   * Unread notification count, stamped as `badge` onto Expo pushes so the
+   * app icon shows the number while the app is dead. Incremented here per
+   * delivered notify; overwritten by the phone's absolute `set_badge` frame
+   * whenever its local state changes. Absent on records written before the
+   * field existed — read as 0.
+   */
+  badge?: number
 }
 
 /** An Expo ticket awaiting its receipt. Key: `ticket:<notificationId>`. */
@@ -93,8 +103,9 @@ const MIN_ALARM_GAP_MS = 60_000
  *   records are forwarded verbatim, never parsed, stored, or logged.
  * - The push CONTROL PLANE (0x03 records, defined in protocol.ts) is
  *   deliberately relay-terminated. It persists exactly three small record
- *   kinds in DO storage: device push registrations keyed by phoneId, Expo
- *   ticket ids awaiting receipts, and processed notificationIds for
+ *   kinds in DO storage: device push registrations keyed by phoneId (token,
+ *   platform, app version, unread badge count), Expo ticket ids awaiting
+ *   receipts, and processed notificationIds for
  *   idempotency (pruned after 24 h). Notification titles/bodies pass through
  *   to Expo when (and only when) push fallback fires; they are never stored
  *   and never logged. Push tokens are logged as a short prefix only.
@@ -211,6 +222,8 @@ export class Tunnel implements DurableObject {
         return this.onNotify(ws, attachment, raw)
       case 'notification_ack':
         return this.onNotificationAck(attachment, raw)
+      case 'set_badge':
+        return this.onSetBadge(ws, attachment, raw)
       default:
         // Forward compatibility: a newer client may speak control types this
         // relay predates. Ignoring them is the contract.
@@ -250,11 +263,15 @@ export class Tunnel implements DurableObject {
     if (!attachment.phoneId) {
       ws.serializeAttachment({ ...attachment, phoneId: frame.phoneId } satisfies Attachment)
     }
+    // Re-registration refreshes the token, never the badge — the count only
+    // moves on delivered notifies and on the phone's own set_badge.
+    const existing = await this.ctx.storage.get<DeviceRecord>(`${DEVICE_PREFIX}${frame.phoneId}`)
     const record: DeviceRecord = {
       expoPushToken: frame.expoPushToken,
       platform: frame.platform,
       appVersion: frame.appVersion ?? null,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      badge: existing?.badge ?? 0
     }
     await this.ctx.storage.put(`${DEVICE_PREFIX}${frame.phoneId}`, record)
     console.log(
@@ -324,6 +341,14 @@ export class Tunnel implements DurableObject {
       }
     } else {
       const phones = this.socketsOf('guest')
+      const deliverable = phones.length > 0 || Boolean(device.expoPushToken)
+      if (deliverable) {
+        // Count the notification the moment a delivery path exists — once per
+        // notificationId (replays returned above), never per send attempt, so
+        // the in-band try and its push fallback cannot double-count.
+        device.badge = Math.min(BADGE_COUNT_MAX, (device.badge ?? 0) + 1)
+        await this.ctx.storage.put(`${DEVICE_PREFIX}${frame.phoneId}`, device)
+      }
       if (phones.length > 0) {
         const notification: NotificationFrame = { ...frame, type: 'notification' }
         this.pendingAcks.set(frame.notificationId, true)
@@ -338,7 +363,7 @@ export class Tunnel implements DurableObject {
       } else if (device.expoPushToken) {
         // waitUntil, never await: Expo's 1–2 s round trip must not block the
         // desktop's answer (or, via the input gate, the whole tunnel).
-        this.ctx.waitUntil(this.pushViaExpo(frame, device.expoPushToken))
+        this.ctx.waitUntil(this.pushViaExpo(frame, device.expoPushToken, device.badge ?? 0))
         result = {
           v: 1,
           type: 'notify_result',
@@ -372,6 +397,44 @@ export class Tunnel implements DurableObject {
     this.pendingAcks.delete(parsed.frame.notificationId)
   }
 
+  /**
+   * The phone reconciles its unread count. Same authorization story as
+   * register_push: guest socket only, bound to one phoneId, and the phoneId
+   * must name a device registered on this pairing.
+   */
+  private async onSetBadge(
+    ws: WebSocket,
+    attachment: Attachment,
+    raw: Record<string, unknown>
+  ): Promise<void> {
+    if (attachment.role !== 'guest') {
+      console.warn('[push] set_badge from a non-phone socket rejected')
+      return
+    }
+    const parsed = parseSetBadge(raw)
+    if ('error' in parsed) {
+      console.warn(`[push] set_badge rejected: ${parsed.error}`)
+      return
+    }
+    const frame = parsed.frame
+    if (attachment.phoneId && attachment.phoneId !== frame.phoneId) {
+      console.warn('[push] set_badge with a different phoneId on a bound socket rejected')
+      return
+    }
+    if (!attachment.phoneId) {
+      ws.serializeAttachment({ ...attachment, phoneId: frame.phoneId } satisfies Attachment)
+    }
+    const key = `${DEVICE_PREFIX}${frame.phoneId}`
+    const device = await this.ctx.storage.get<DeviceRecord>(key)
+    if (!device) {
+      console.warn(`[push] set_badge for unregistered phoneId ${frame.phoneId} ignored`)
+      return
+    }
+    if ((device.badge ?? 0) === frame.count) return
+    device.badge = frame.count
+    await this.ctx.storage.put(key, device)
+  }
+
   /** The in-band ack window: give the phone a moment, then push anyway. */
   private async fallBackUnlessAcked(frame: NotifyFrame, device: DeviceRecord): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, this.ackTimeoutMs()))
@@ -384,7 +447,7 @@ export class Tunnel implements DurableObject {
       return
     }
     console.log(`[push] ${frame.notificationId}: no ack within ${this.ackTimeoutMs()}ms — pushing`)
-    await this.pushViaExpo(frame, device.expoPushToken)
+    await this.pushViaExpo(frame, device.expoPushToken, device.badge ?? 0)
   }
 
   /** Test-only override hatch; production always runs the protocol constant. */
@@ -394,7 +457,7 @@ export class Tunnel implements DurableObject {
   }
 
   /** Send one notification through Expo and persist its ticket for the sweep. */
-  private async pushViaExpo(frame: NotifyFrame, token: string): Promise<void> {
+  private async pushViaExpo(frame: NotifyFrame, token: string, badge: number): Promise<void> {
     const [ticket] = await sendExpoPush(this.env, [
       {
         to: token,
@@ -409,7 +472,8 @@ export class Tunnel implements DurableObject {
         sound: 'default',
         priority: frame.urgency === 'high' ? 'high' : 'default',
         ttl: frame.ttl,
-        channelId: ANDROID_CHANNEL_ID
+        channelId: ANDROID_CHANNEL_ID,
+        badge
       }
     ])
     if (!ticket) return // transport/HTTP failure — already logged by push.ts
