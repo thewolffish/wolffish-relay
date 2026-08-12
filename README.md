@@ -9,7 +9,7 @@
 The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare Worker with one Durable Object class introduces a desktop and a phone by rendezvous ID and forwards their end-to-end-encrypted frames verbatim. It stores nothing, logs nothing, and only ever sees ciphertext.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.18-green.svg)](https://wolffi.sh)
+[![Version](https://img.shields.io/badge/version-1.0.19-green.svg)](https://wolffi.sh)
 [![Platform](https://img.shields.io/badge/platform-Cloudflare%20Workers-lightgrey.svg)](<>)
 
 > 📄 **[Illustrated reference →](https://cdn.wolffi.sh/generic/relay.html)** — the same material with diagrams, the ciphertext audit, throughput tables and a verified example run. Generated from a real run by `npm run playground`; its source is [RELAY.html](RELAY.html) in this repo.
@@ -235,6 +235,8 @@ For each valid `notify`, in order:
 4. no live phone, token known?       -> answer `push`, send via Expo in the background
 5. no live phone, no token?          -> notify_result: dropped ("no push token")
 ```
+
+**Transport priority is per platform.** Android is always sent at high priority, whatever urgency the model chose; iOS keeps the mapping urgency implies (`high` → APNs 10, otherwise APNs 5). Expo's two priorities do not mean the same thing on the two platforms: APNs 5 is a power hint and the notification still arrives, while FCM normal is a queue — a phone in Doze holds the message until its next maintenance window, minutes at best and hours overnight, which is precisely the asleep-and-closed case push exists for. On Android, `normal` was never a quieter delivery, only a later one, and the phone cannot show the difference anyway (one channel, `agent-runs`, at HIGH importance). Every push here is a user-visible notification the model deliberately sent, which is what FCM reserves high priority for.
 
 The desktop's answer never waits on Expo — pushes run in `waitUntil` after the `notify_result` is on the wire. Expo sends go straight to `exp.host` with plain `fetch` (no SDK), batched at most 100 per request, authenticated with the `EXPO_ACCESS_TOKEN` Worker secret (the Expo project has Enhanced Security for Push Notifications enabled, so an unauthenticated send fails — loudly, in the logs). Fifteen minutes after any push send, a Durable Object alarm sweeps the stored ticket ids through `getReceipts`: a `DeviceNotRegistered` receipt deletes that phone's registration (the token is dead — uninstall or rotation), and an `InvalidCredentials` receipt is logged distinctly because it is the only signal that the FCM/APNs credentials themselves are broken.
 

@@ -87,6 +87,31 @@ const TICKET_RETENTION_MS = NOTIFY_DEDUP_RETENTION_MS
 const MIN_ALARM_GAP_MS = 60_000
 
 /**
+ * Transport priority for one push. Android is always `high`, whatever urgency
+ * the model chose; iOS keeps the mapping urgency has always had.
+ *
+ * The asymmetry is the platforms', not ours. Expo turns `high` into FCM high /
+ * APNs 10 and `default` into FCM normal / APNs 5, and those two halves do not
+ * mean the same thing. APNs 5 is a power hint: the notification still arrives.
+ * FCM normal is a queue — a phone in Doze holds the message until its next
+ * maintenance window, which is minutes at best and hours overnight, exactly
+ * the "asleep, app closed" case these notifications exist for. So on Android
+ * `default` was never a quieter delivery, only a later one, and the phone
+ * could not even show the difference: there is one channel (`agent-runs`) at
+ * HIGH importance, so urgency has no presentation effect on Android at all.
+ *
+ * FCM asks that high priority be reserved for time-sensitive, user-visible
+ * messages, and every push here is one by construction — a notify_phone call
+ * the model deliberately made, rendered to the user as a notification, never
+ * background work and never automatic (nothing in this system sends one on
+ * its own). Urgency still means what it says on iOS, where it costs nothing.
+ */
+function expoPriority(platform: PushPlatform, urgency: NotifyFrame['urgency']): 'default' | 'high' {
+  if (platform === 'android') return 'high'
+  return urgency === 'high' ? 'high' : 'default'
+}
+
+/**
  * One Tunnel instance exists per rendezvous ID (Durable Objects guarantee a
  * single global instance per name). It holds at most two live sockets — one
  * `host`, one `guest` — and forwards binary frames verbatim between them.
@@ -369,7 +394,7 @@ export class Tunnel implements DurableObject {
       } else if (device.expoPushToken) {
         // waitUntil, never await: Expo's 1–2 s round trip must not block the
         // desktop's answer (or, via the input gate, the whole tunnel).
-        this.ctx.waitUntil(this.pushViaExpo(frame, device.expoPushToken, device.badge ?? 0))
+        this.ctx.waitUntil(this.pushViaExpo(frame, device, device.expoPushToken))
         result = {
           v: 1,
           type: 'notify_result',
@@ -488,7 +513,7 @@ export class Tunnel implements DurableObject {
       return
     }
     console.log(`[push] ${frame.notificationId}: no ack within ${this.ackTimeoutMs()}ms — pushing`)
-    await this.pushViaExpo(frame, device.expoPushToken, device.badge ?? 0)
+    await this.pushViaExpo(frame, device, device.expoPushToken)
   }
 
   /** Test-only override hatch; production always runs the protocol constant. */
@@ -497,8 +522,14 @@ export class Tunnel implements DurableObject {
     return Number.isFinite(override) && override > 0 ? override : NOTIFY_ACK_TIMEOUT_MS
   }
 
-  /** Send one notification through Expo and persist its ticket for the sweep. */
-  private async pushViaExpo(frame: NotifyFrame, token: string, badge: number): Promise<void> {
+  /** Send one notification through Expo and persist its ticket for the sweep.
+   *  Takes the whole device record because the send depends on more than the
+   *  token: the badge it stamps and, via expoPriority, the platform. */
+  private async pushViaExpo(
+    frame: NotifyFrame,
+    device: DeviceRecord,
+    token: string
+  ): Promise<void> {
     const [ticket] = await sendExpoPush(this.env, [
       {
         to: token,
@@ -511,10 +542,10 @@ export class Tunnel implements DurableObject {
           url: frame.deeplink
         },
         sound: 'default',
-        priority: frame.urgency === 'high' ? 'high' : 'default',
+        priority: expoPriority(device.platform, frame.urgency),
         ttl: frame.ttl,
         channelId: ANDROID_CHANNEL_ID,
-        badge
+        badge: device.badge ?? 0
       }
     ])
     if (!ticket) return // transport/HTTP failure — already logged by push.ts

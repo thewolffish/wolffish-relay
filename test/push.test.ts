@@ -135,14 +135,15 @@ async function registerPhone(
   rid: string,
   guest: Client,
   token: string | null,
-  phoneId = PHONE_ID
+  phoneId = PHONE_ID,
+  platform: 'ios' | 'android' = 'ios'
 ): Promise<void> {
   sendControl(guest, {
     v: 1,
     type: 'register_push',
     phoneId,
     expoPushToken: token,
-    platform: 'ios',
+    platform,
     appVersion: '1.0.17'
   })
   await until(
@@ -171,10 +172,13 @@ function notifyFrame(overrides: Partial<NotifyFrame> = {}): Record<string, unkno
 }
 
 /** Registered phone that then went away — the pure Expo push path. */
-async function withOfflinePhone(token: string | null): Promise<{ rid: string; host: Client }> {
+async function withOfflinePhone(
+  token: string | null,
+  platform: 'ios' | 'android' = 'ios'
+): Promise<{ rid: string; host: Client }> {
   const rid = freshRid()
   const { host, guest } = await pairUp(rid)
-  await registerPhone(rid, guest, token)
+  await registerPhone(rid, guest, token, PHONE_ID, platform)
   guest.ws.close(1000, 'backgrounded')
   expect(await host.next()).toBe('{"t":"peer-gone"}')
   return { rid, host }
@@ -441,6 +445,29 @@ describe('push fallback with no live phone', () => {
     expect(String(result.reason)).toContain('no push token')
     await new Promise((resolve) => setTimeout(resolve, 200))
     expect(expoCalls.length).toBe(0)
+  })
+
+  // The whole point of the platform split: a `normal` FCM message to a dozing
+  // Android phone is HELD until its next maintenance window, so urgency there
+  // would decide whether the notification arrives tonight or tomorrow. iOS has
+  // no such cliff (APNs 5 still delivers), so urgency keeps its meaning.
+  it('always sends Android at high priority, and iOS by urgency', async () => {
+    const android = await withOfflinePhone(TOKEN, 'android')
+    sendControl(android.host, notifyFrame({ urgency: 'normal' }))
+    expect((await nextControl(android.host)).route).toBe('push')
+    await until(() => expoCalls.length === 1, 3000, 'android normal-urgency send')
+    expect((expoCalls[0].body as Record<string, unknown>[])[0].priority).toBe('high')
+
+    const ios = await withOfflinePhone(TOKEN)
+    sendControl(ios.host, notifyFrame({ urgency: 'normal' }))
+    expect((await nextControl(ios.host)).route).toBe('push')
+    await until(() => expoCalls.length === 2, 3000, 'ios normal-urgency send')
+    expect((expoCalls[1].body as Record<string, unknown>[])[0].priority).toBe('default')
+
+    sendControl(ios.host, notifyFrame({ urgency: 'high' }))
+    expect((await nextControl(ios.host)).route).toBe('push')
+    await until(() => expoCalls.length === 3, 3000, 'ios high-urgency send')
+    expect((expoCalls[2].body as Record<string, unknown>[])[0].priority).toBe('high')
   })
 })
 
