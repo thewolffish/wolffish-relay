@@ -447,10 +447,10 @@ Wolffish Mobile is the companion phone app — pair it to your desktop once by s
 <table>
   <tr>
     <td align="center">
-      <a href="https://apps.apple.com/us/app/wolffish/id6792797989"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" width="168" height="56" alt="Download on the App Store" /></a>
+      <a href="https://apps.apple.com/us/app/wolffish/id6792797989"><img src="https://cdn.wolffi.sh/generic/app-store.svg" width="168" height="56" alt="Download on the App Store" /></a>
     </td>
     <td align="center">
-      <a href="https://play.google.com/store/apps/details?id=sh.wolffi.mobile"><img src="https://raw.githubusercontent.com/thewolffish/wolffish-mobile/main/.github/assets/google-play.png" width="188" height="56" alt="Get it on Google Play" /></a>
+      <a href="https://play.google.com/store/apps/details?id=sh.wolffi.mobile"><img src="https://cdn.wolffi.sh/generic/google-play.svg" width="189" height="56" alt="Get it on Google Play" /></a>
     </td>
   </tr>
 </table>
