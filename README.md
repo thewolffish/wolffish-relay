@@ -31,6 +31,7 @@ The zero-retention rendezvous relay for the Wolffish tunnel. A single Cloudflare
 - [Run your own relay](#run-your-own-relay)
 - [Development](#development)
 - [Deployment](#deployment)
+- [Get the mobile app](#get-the-mobile-app)
 
 ---
 
@@ -438,6 +439,23 @@ Requirements: Node 24+, npm 11+.
 Releases are cut with `npm run release` and deployed **exclusively by GitHub Actions** — a tag push runs the full verification suite, and only a green run reaches Cloudflare. No credentials live on a laptop.
 
 See [RELEASE.md](RELEASE.md) for the procedure and [SETUP.md](SETUP.md) for the one-time Cloudflare + GitHub setup, including the hardening checklist.
+
+## Get the mobile app
+
+Wolffish Mobile is the companion phone app — pair it to your desktop once by scanning a QR code, then reach your agent from anywhere over an end-to-end encrypted tunnel.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://apps.apple.com/us/app/wolffish/id6792797989"><img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" height="56" alt="Download on the App Store" /></a>
+    </td>
+    <td align="center">
+      <a href="https://play.google.com/store/apps/details?id=sh.wolffi.mobile"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="83" alt="Get it on Google Play" /></a>
+    </td>
+  </tr>
+</table>
+
+Source: [thewolffish/wolffish-mobile](https://github.com/thewolffish/wolffish-mobile)
 
 ## License
 
