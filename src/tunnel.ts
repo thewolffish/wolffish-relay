@@ -214,7 +214,21 @@ export class Tunnel implements DurableObject {
     // Control records are addressed to the relay — terminated here, never
     // forwarded. Everything else stays opaque: nothing past byte 0 is read.
     if (record.length > 0 && record[0] === CONTROL_RECORD) {
-      await this.handleControl(ws, attachment, record)
+      try {
+        await this.handleControl(ws, attachment, record)
+      } catch (error) {
+        // Contained here because an exception escaping a socket handler
+        // aborts the whole object, and an abort disconnects BOTH live
+        // sockets. The control plane awaits storage, and notify frames
+        // arrive exactly while a run is going — so a transient storage
+        // hiccup here used to land as "the tunnel dropped mid-turn" on two
+        // devices at once. A control-plane failure costs that notification,
+        // never the tunnel; the desktop's ack timeout and the phone's
+        // reconciliation own recovering from a lost one.
+        console.error(
+          `[push] control record failed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
       return
     }
 
