@@ -165,6 +165,7 @@ function notifyFrame(overrides: Partial<NotifyFrame> = {}): Record<string, unkno
     body: 'Your migration completed without errors.',
     urgency: 'normal',
     deeplink: null,
+    conversationId: '2026-08-06_14-03-23',
     ttl: 3600,
     ts: Date.now(),
     ...overrides
@@ -407,7 +408,11 @@ describe('in-band delivery', () => {
         // The desktop's send time rides along: the phone's notification log
         // dates the card by when it was SENT, not by when the handset — which
         // may have been off for hours — happened to receive it.
-        ts: frame.ts
+        ts: frame.ts,
+        // …and which conversation raised it, which is what the phone badges.
+        // Separate from `url`: notify_phone lets the model omit the deeplink,
+        // and a notification with no destination still came from somewhere.
+        conversationId: frame.conversationId
       }
     })
 
@@ -735,5 +740,46 @@ describe('receipt sweep', () => {
     expect(await runDurableObjectAlarm(stubFor(rid))).toBe(true)
     expect(await readStorage(rid, ticketKey)).toBeUndefined()
     expect(await readStorage(rid, `device:${PHONE_ID}`)).toBeDefined()
+  })
+})
+
+describe('the conversation a notification came out of', () => {
+  it('survives the rebuild and reaches the phone in-band', async () => {
+    // Every frame is reconstructed field by field on the way through, so an
+    // unlisted field is dropped silently — which for this one would mean the
+    // phone badging nothing at all. Belt and braces: the guest gets it.
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    const frame = notifyFrame({ deeplink: null, conversationId: '2026-09-16_19-02-11' })
+    sendControl(host, frame)
+    expect((await nextControl(host)).route).toBe('inband')
+
+    const delivered = await nextControl(guest)
+    expect(delivered).toMatchObject({
+      type: 'notification',
+      notificationId: frame.notificationId,
+      deeplink: null,
+      conversationId: '2026-09-16_19-02-11'
+    })
+  })
+
+  it('is null rather than a reject when an older desktop sends none', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, TOKEN)
+
+    const frame = notifyFrame()
+    delete (frame as Record<string, unknown>).conversationId
+    sendControl(host, frame)
+    expect((await nextControl(host)).route).toBe('inband')
+
+    // Delivered, not refused: a notification is still worth having without it,
+    // and the phone falls back to reading the deeplink as it always did.
+    expect(await nextControl(guest)).toMatchObject({
+      type: 'notification',
+      conversationId: null
+    })
   })
 })

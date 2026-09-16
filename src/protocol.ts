@@ -170,6 +170,18 @@ export type NotifyFrame = {
   body: string
   urgency: NotifyUrgency
   deeplink: string | null
+  /**
+   * The conversation this notification came OUT of — the desktop's own turn
+   * scope, never the model's. Distinct from `deeplink`, which is where a TAP
+   * goes and may be absent entirely; the phone badges the conversation a
+   * notification came out of, and this is the only place it can learn that.
+   *
+   * Passed through rather than acted on: nothing up here reads it, and the
+   * relay stores no more of it than it does of the title. It has to be named
+   * in the parse all the same — every frame is REBUILT field by field, so an
+   * unlisted field is silently dropped before it can reach the phone.
+   */
+  conversationId: string | null
   /** Seconds. */
   ttl: number
   /** Unix ms at the desktop. */
@@ -259,6 +271,10 @@ const PUSH_TOKEN_REGEX = /^Expo(nent)?PushToken\[[\x21-\x7e]{1,180}\]$/
 
 const RUN_ID_REGEX = /^[\x20-\x7e]{1,128}$/
 
+/** Conversation ids ARE filenames on the desktop, so this is that same safe
+ *  set — the shape both clients validate deeplink ids against. */
+const CONVERSATION_ID_REGEX = /^[A-Za-z0-9._-]{1,128}$/
+
 export function isValidPhoneId(value: unknown): value is string {
   return typeof value === 'string' && PHONE_ID_REGEX.test(value)
 }
@@ -345,6 +361,13 @@ export function parseNotify(raw: Record<string, unknown>): ParseResult<NotifyFra
   if (typeof raw.ttl !== 'number' || !Number.isFinite(raw.ttl)) return { error: 'invalid ttl' }
   const ttl = Math.min(NOTIFY_TTL_MAX, Math.max(NOTIFY_TTL_MIN, Math.round(raw.ttl)))
   const ts = typeof raw.ts === 'number' && Number.isFinite(raw.ts) ? raw.ts : Date.now()
+  // Shaped like a conversation id (which is a FILENAME on the desktop) or
+  // nothing. Tolerated rather than rejected: an older desktop sends none, and
+  // a notification is still worth delivering without it.
+  const conversationId =
+    typeof raw.conversationId === 'string' && CONVERSATION_ID_REGEX.test(raw.conversationId)
+      ? raw.conversationId
+      : null
   return {
     frame: {
       v: 1,
@@ -357,6 +380,7 @@ export function parseNotify(raw: Record<string, unknown>): ParseResult<NotifyFra
       body: raw.body,
       urgency: raw.urgency as NotifyUrgency,
       deeplink,
+      conversationId,
       ttl,
       ts
     }

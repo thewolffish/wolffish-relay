@@ -554,6 +554,9 @@ export class Tunnel implements DurableObject {
           runId: frame.runId,
           phase: frame.phase,
           url: frame.deeplink,
+          // Which conversation raised it — what the phone badges. Separate
+          // from `url`, which is where a tap goes and may be absent.
+          conversationId: frame.conversationId,
           // When the DESKTOP sent it. The phone keeps its own log of every
           // notification it renders (nothing up here does — this DO holds an
           // idempotency marker, not a history), and without this the log can
