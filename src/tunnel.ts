@@ -553,7 +553,15 @@ export class Tunnel implements DurableObject {
           notificationId: frame.notificationId,
           runId: frame.runId,
           phase: frame.phase,
-          url: frame.deeplink
+          url: frame.deeplink,
+          // When the DESKTOP sent it. The phone keeps its own log of every
+          // notification it renders (nothing up here does — this DO holds an
+          // idempotency marker, not a history), and without this the log can
+          // only date a pushed notification by when the handset happened to
+          // receive it: minutes late for anything that waited in a tray, and
+          // hours late for a phone that was off. An older app ignores the
+          // extra field.
+          ts: frame.ts
         },
         sound: 'default',
         priority: expoPriority(device.platform, frame.urgency),

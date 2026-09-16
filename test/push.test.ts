@@ -403,7 +403,11 @@ describe('in-band delivery', () => {
         notificationId: frame.notificationId,
         runId: frame.runId,
         phase: 'completed',
-        url: 'wolffish://runs/9'
+        url: 'wolffish://runs/9',
+        // The desktop's send time rides along: the phone's notification log
+        // dates the card by when it was SENT, not by when the handset — which
+        // may have been off for hours — happened to receive it.
+        ts: frame.ts
       }
     })
 
