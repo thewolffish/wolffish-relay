@@ -114,7 +114,9 @@ export type NotifyUrgency = (typeof NOTIFY_URGENCIES)[number]
 export type PushPlatform = 'ios' | 'android'
 
 export const NOTIFY_TITLE_MAX = 60
-export const NOTIFY_BODY_MAX = 180
+// No body ceiling: the phone renders the body whole on its notifications page,
+// so a cap here would silently cut text the user can read nowhere else. The
+// 1 MiB frame cap is the only bound.
 export const NOTIFY_TTL_MIN = 60
 export const NOTIFY_TTL_MAX = 86_400
 
@@ -335,9 +337,10 @@ export function parseRegisterPush(raw: Record<string, unknown>): ParseResult<Reg
 }
 
 /**
- * Validate a notify frame. Oversized or malformed strings are REJECTED, not
- * truncated — silent truncation would deliver a notification the desktop
- * never composed. The numeric ttl alone is clamped into range.
+ * Validate a notify frame. Malformed strings are REJECTED, not truncated —
+ * silent truncation would deliver a notification the desktop never composed.
+ * The title keeps its ceiling (it is one banner line); the body has none, since
+ * the phone renders it whole. The numeric ttl alone is clamped into range.
  */
 export function parseNotify(raw: Record<string, unknown>): ParseResult<NotifyFrame> {
   if (raw.v !== PUSH_WIRE_VERSION) return { error: `unsupported version ${String(raw.v)}` }
@@ -351,7 +354,6 @@ export function parseNotify(raw: Record<string, unknown>): ParseResult<NotifyFra
   if (raw.title.length > NOTIFY_TITLE_MAX) return { error: `title exceeds ${NOTIFY_TITLE_MAX}` }
   if (TITLE_FORBIDDEN.test(raw.title)) return { error: 'title carries control characters' }
   if (typeof raw.body !== 'string' || raw.body.length === 0) return { error: 'missing body' }
-  if (raw.body.length > NOTIFY_BODY_MAX) return { error: `body exceeds ${NOTIFY_BODY_MAX}` }
   if (BODY_FORBIDDEN.test(raw.body)) return { error: 'body carries control characters' }
   if (!NOTIFY_URGENCIES.includes(raw.urgency as NotifyUrgency)) return { error: 'invalid urgency' }
   let deeplink: string | null

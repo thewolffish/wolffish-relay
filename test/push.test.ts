@@ -254,14 +254,13 @@ describe('notify validation and authorization', () => {
     expect(expoCalls.length).toBe(0)
   })
 
-  it('rejects oversized and malformed frames instead of truncating', async () => {
+  it('rejects malformed frames instead of truncating', async () => {
     const rid = freshRid()
     const { host, guest } = await pairUp(rid)
     await registerPhone(rid, guest, null)
 
     const cases: [Record<string, unknown>, string][] = [
       [notifyFrame({ title: 'x'.repeat(NOTIFY_TITLE_MAX + 1) }), 'title'],
-      [notifyFrame({ body: 'x'.repeat(200) }), 'body'],
       [notifyFrame({ phase: 'exploded' as NotifyFrame['phase'] }), 'phase'],
       [notifyFrame({ urgency: 'now' as NotifyFrame['urgency'] }), 'urgency'],
       [notifyFrame({ deeplink: 'https://evil.example/x' }), 'deeplink'],
@@ -279,6 +278,21 @@ describe('notify validation and authorization', () => {
     expect(await host.silentFor(200)).toBe(true)
     // Nothing was delivered for any of them.
     expect(await guest.silentFor(0)).toBe(true)
+  })
+
+  it('delivers a long body whole — the body has no ceiling', async () => {
+    const rid = freshRid()
+    const { host, guest } = await pairUp(rid)
+    await registerPhone(rid, guest, null)
+
+    // Well past the 180 characters this was once capped at. The phone renders
+    // the body in full on its notifications page, so the relay has to be a
+    // pass-through here rather than the thing that silently cuts the text.
+    const body = 'y'.repeat(1200)
+    sendControl(host, notifyFrame({ body }))
+
+    expect((await nextControl(host)).route).toBe('inband')
+    expect((await nextControl(guest)).body).toBe(body)
   })
 
   it('never forwards control records to the peer', async () => {
